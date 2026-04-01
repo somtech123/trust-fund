@@ -64,14 +64,14 @@ contract VaultFactory {
      ******************************************************************************/
 
     function createVault(
-        uint256 amount,
+        uint256 amountInWei,
         uint256 releaseTime,
         address[] calldata beneficiaries
     ) external payable returns (address) {
         address sender = msg.sender;
         uint256 value = msg.value;
 
-        uint256 amountInWei = UnitConverter.ethToWeiConverter(amount);
+        // uint256 amountInWei = UnitConverter.ethToWeiConverter(amount);
         uint256 _releaseTime = releaseTime * 1 days;
 
         if (value < CREATION_FEE) revert VaultFactory__InsuffcientCreationFee();
