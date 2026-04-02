@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 pragma solidity ^0.8.24;
-import {UnitConverter} from "./libary/UnitConverter.sol";
 import {Vault} from "./Vault.sol";
 
 /**
@@ -83,7 +82,8 @@ contract VaultFactory {
         if (_releaseTime <= 10 days)
             revert VaultFactory__RealeaseTimeTooEarly();
 
-        if (beneficiaries.length < 0) revert VaultFactory__NoBeneficiaryAdded();
+        if (beneficiaries.length == 0)
+            revert VaultFactory__NoBeneficiaryAdded();
         if (beneficiaries.length >= 10)
             revert VaultFactory__BeneficiaryMaxAmountReached();
 
@@ -129,5 +129,33 @@ contract VaultFactory {
         }
 
         return _vaultAddr;
+    }
+
+    /******************************************************************************
+     *                               View Functions                               *
+     ******************************************************************************/
+
+    function isUserBeneficiary(address user) public view returns (bool) {
+        return isBeneficiaries[user];
+    }
+
+    function getVaultCount() public view returns (uint256) {
+        return svaultCounter;
+    }
+
+    function isValidVault(address vaultAddr) public view returns (bool) {
+        return sIsVault[vaultAddr];
+    }
+
+    function getVault(uint256 vaultId) public view returns (VaultInfo memory) {
+        return sVaultInfo[vaultId];
+    }
+
+    function getVaultAddress(uint256 vaultId) public view returns (address) {
+        return sVaultInfo[vaultId].vaultAddress;
+    }
+
+    function getFactoryOf(address vaultAddress) public view returns (address) {
+        return sIsFactory[vaultAddress];
     }
 }

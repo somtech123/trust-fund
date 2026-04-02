@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 pragma solidity ^0.8.24;
 import {Test} from "forge-std/Test.sol";
+import {console} from "forge-std/console.sol";
 import {DeployVault} from "../../script/DeployVault.s.sol";
 import {VaultFactory} from "../../src/VaultFactory.sol";
+import {MockRejecter} from "../mocks/MockRejecter.sol";
 
 contract VaultFactoryTest is Test {
     VaultFactory vaultFactory;
@@ -19,6 +21,8 @@ contract VaultFactoryTest is Test {
     address USER3 = makeAddr("USER3");
 
     address[] beneficiaries;
+
+    address[] beneficiarieslst;
 
     function setUp() external {
         DeployVault deployVault = new DeployVault();
@@ -130,6 +134,263 @@ contract VaultFactoryTest is Test {
             VALID_FUND,
             earlyReleaseTime,
             beneficiaries
+        );
+    }
+
+    // test creating vault with empty or no beneficiary ---------------------------------
+
+    function testCreateVaultWithEmptyBeneficiary() public isCreator {
+        address[] memory _beneficiaries;
+
+        vm.expectRevert(VaultFactory.VaultFactory__NoBeneficiaryAdded.selector);
+
+        vaultFactory.createVault{value: CREATION_FEE}(
+            VALID_FUND,
+            VALID_DURATION,
+            _beneficiaries
+        );
+    }
+
+    // test creating vault with max number of beneficiary  ---------------------------------
+    // max beneficiary= 10
+
+    function testCreateVaultWithMoreThanTenBeneficiary() public isCreator {
+        for (uint256 i = 0; i < 10; i++) {
+            address user = vm.addr(i + 1);
+
+            beneficiarieslst.push(user);
+        }
+        console.log("----------------------", beneficiarieslst.length);
+
+        vm.expectRevert(
+            VaultFactory.VaultFactory__BeneficiaryMaxAmountReached.selector
+        );
+
+        vaultFactory.createVault{value: CREATION_FEE}(
+            VALID_FUND,
+            VALID_DURATION,
+            beneficiarieslst
+        );
+
+        delete beneficiarieslst; //reset the array in storage
+    }
+
+    // test creating vault with duplicate beneficiary ---------------------------------
+
+    function testCreateVaultWithDuplicateBeneficiary() public isCreator {
+        beneficiarieslst.push(USER1);
+        beneficiarieslst.push(USER2);
+        beneficiarieslst.push(USER1);
+
+        console.log("----------------------", beneficiarieslst.length);
+
+        vm.expectRevert(
+            VaultFactory.VaultFactory__DuplicateBeneficiaryAdded.selector
+        );
+
+        vaultFactory.createVault{value: CREATION_FEE}(
+            VALID_FUND,
+            VALID_DURATION,
+            beneficiarieslst
+        );
+        delete beneficiarieslst;
+    }
+
+    // test creating vault with zero address beneficiary---------------------------------
+
+    function testCreateVaultWithZeroAddressBeneficiary() public isCreator {
+        beneficiarieslst.push(address(0));
+
+        vm.expectRevert(
+            VaultFactory.VaultFactory__ZeroAddressBeneficiary.selector
+        );
+
+        vaultFactory.createVault{value: CREATION_FEE}(
+            VALID_FUND,
+            VALID_DURATION,
+            beneficiarieslst
+        );
+        delete beneficiarieslst;
+    }
+
+    // test beneficiary is added when creating vault ---------------------------------
+
+    function testCreateVaultBeneficiaryAdded() public isCreator {
+        beneficiarieslst.push(USER1);
+
+        vaultFactory.createVault{value: CREATION_FEE}(
+            VALID_FUND,
+            VALID_DURATION,
+            beneficiarieslst
+        );
+
+        assertTrue(vaultFactory.isUserBeneficiary(USER1));
+
+        delete beneficiarieslst;
+    }
+
+    // test is invalid beneficiary is added to vault ---------------------------------
+
+    function testCreateVaultWithInvalidBeneficiary() public isCreator {
+        beneficiarieslst.push(USER1);
+
+        vaultFactory.createVault{value: CREATION_FEE}(
+            VALID_FUND,
+            VALID_DURATION,
+            beneficiarieslst
+        );
+
+        assertFalse(vaultFactory.isUserBeneficiary(USER2));
+
+        delete beneficiarieslst;
+    }
+
+    /******************************************************************************
+     *                               Success Paths                                *
+     ******************************************************************************/
+
+    // test creating vault was successful ---------------------------------
+
+    function testCreateVaultSuccessfully() public isCreator addBeneficiary {
+        vaultFactory.createVault{value: CREATION_FEE}(
+            VALID_FUND,
+            VALID_DURATION,
+            beneficiaries
+        );
+
+        assertEq(vaultFactory.getVaultCount(), 1);
+
+        address vaultAddress = vaultFactory.getVaultAddress(0);
+
+        assertTrue(vaultAddress != address(0));
+        assertTrue(vaultFactory.isValidVault(vaultAddress));
+    }
+
+    // test creating vault events are emitted successful ---------------------------------
+
+    function testCreateVaultEmitEventSuccessfully()
+        public
+        isCreator
+        addBeneficiary
+    {
+        vm.expectEmit(true, false, false, true);
+
+        emit VaultFactory.CreatedVault(CREATOR, VALID_FUND, 1);
+
+        vaultFactory.createVault{value: CREATION_FEE}(
+            VALID_FUND,
+            VALID_DURATION,
+            beneficiaries
+        );
+    }
+
+    // test created vault info are saved correctly ---------------------------------
+
+    function testCreateVaultSavesVaultInfoCorrectly()
+        public
+        isCreator
+        addBeneficiary
+    {
+        vaultFactory.createVault{value: CREATION_FEE}(
+            VALID_FUND,
+            VALID_DURATION,
+            beneficiaries
+        );
+
+        VaultFactory.VaultInfo memory _vaultInfo = vaultFactory.getVault(0);
+
+        assertTrue(_vaultInfo.vaultAddress != address(0));
+        assertTrue(_vaultInfo.creatorAddress == CREATOR);
+
+        assertEq(_vaultInfo.amount, VALID_FUND);
+        assertTrue(_vaultInfo.isActive);
+        assertTrue(_vaultInfo.releaseTime > block.timestamp);
+    }
+
+    // test multiple creation of vault is successfull ---------------------------------
+
+    function testCreateMutipleVault() public isCreator {
+        uint256 vaultCount = 3;
+
+        address[] memory _beneficiaries = new address[](1);
+
+        for (uint256 i = 0; i < vaultCount; i++) {
+            address user = vm.addr(i + 1);
+
+            _beneficiaries[0] = user;
+
+            vaultFactory.createVault{value: CREATION_FEE}(
+                VALID_FUND,
+                VALID_DURATION,
+                _beneficiaries
+            );
+        }
+
+        assertEq(vaultFactory.getVaultCount(), vaultCount);
+        assertEq(
+            vaultFactory.getVaultAddress(0) != vaultFactory.getVaultAddress(1),
+            true
+        );
+    }
+
+    // test created vault refund excess creation fee ---------------------------------
+
+    function testCreateVaultRefundExcessFees() public isCreator addBeneficiary {
+        uint256 excessFee = 1000000000000000;
+        uint256 initialBalance = CREATOR.balance;
+
+        vaultFactory.createVault{value: CREATION_FEE + excessFee}(
+            VALID_FUND,
+            VALID_DURATION,
+            beneficiaries
+        );
+
+        uint256 balanceAfter = CREATOR.balance;
+
+        assertEq(initialBalance - balanceAfter, CREATION_FEE);
+    }
+
+    // test refund fail when caller cannot receive the excess creation fee ---------------------------------
+
+    function testCreateVaultRefundFailWhenCallerCannotReceiveEth() public {
+        uint256 excessFee = 10000000000000000;
+
+        address[] memory _beneficiaries = new address[](1);
+        address user = vm.addr(1);
+        _beneficiaries[0] = user;
+
+        MockRejecter rejecter = new MockRejecter();
+
+        vm.deal(address(rejecter), STARTING_BALANCE);
+
+        vm.prank(address(rejecter));
+        vm.expectRevert("Refund failed");
+
+        rejecter.rejectExcess(
+            vaultFactory,
+            VALID_FUND,
+            VALID_DURATION,
+            _beneficiaries,
+            CREATION_FEE + excessFee
+        );
+    }
+
+    /******************************************************************************
+     *                            test view functions                             *
+     ******************************************************************************/
+    // test created vault is from the vaultfactory ---------------------------------
+
+    function testVaultisFactory() public isCreator addBeneficiary {
+        vaultFactory.createVault{value: CREATION_FEE}(
+            VALID_FUND,
+            VALID_DURATION,
+            beneficiaries
+        );
+
+        address vaultAddress = vaultFactory.getVaultAddress(0);
+
+        assertTrue(
+            vaultFactory.getFactoryOf(vaultAddress) == address(vaultFactory)
         );
     }
 }
