@@ -12,8 +12,16 @@ contract VaultFactoryTest is Test {
     uint256 constant STARTING_BALANCE = 10 ether;
     uint256 constant CREATION_FEE = 1000000000000000;
     uint256 constant MINIMUM_FEE = 0.01 ether;
+    uint256 constant MIN_FEE = 0.1 ether;
+    uint256 constant MAXIMUM_FEE = 100 ether;
     uint256 constant VALID_FUND = 4 ether;
+
+    uint256 constant MIN_RELEASE_DAYS = 11;
+    uint256 constant MAX_RELEASE_DAYS = 3650;
     uint256 constant VALID_DURATION = 365;
+
+    uint256 constant MIN_NUMBER_OF_BENEFICIAY = 1;
+    uint256 constant MAX_NUMBER_OF_BENEFICIAY = 9;
 
     address CREATOR = makeAddr("CREATOR");
     address USER1 = makeAddr("USER1");
@@ -392,5 +400,256 @@ contract VaultFactoryTest is Test {
         assertTrue(
             vaultFactory.getFactoryOf(vaultAddress) == address(vaultFactory)
         );
+    }
+
+    /******************************************************************************
+     *                                fuzz testing                                *
+     ******************************************************************************/
+
+    /******************************************************************************
+     *                         Success Path fuzz testing                          *
+     ******************************************************************************/
+
+    /**dev All inputs are valid; vault must be created successfully */
+
+    function testFuzzCreateVault(
+        uint256 amountInWei,
+        uint256 releaseTimeDays,
+        uint256 numBeneficiaries
+    ) public isCreator {
+        amountInWei = bound(amountInWei, MINIMUM_FEE, MAXIMUM_FEE);
+
+        releaseTimeDays = bound(
+            releaseTimeDays,
+            MIN_RELEASE_DAYS,
+            MAX_RELEASE_DAYS
+        );
+
+        numBeneficiaries = bound(
+            numBeneficiaries,
+            MIN_NUMBER_OF_BENEFICIAY,
+            MAX_NUMBER_OF_BENEFICIAY
+        );
+
+        address[] memory beneficiary = _createNthBeneficiary(numBeneficiaries);
+
+        address vaultAddress = vaultFactory.createVault{value: CREATION_FEE}(
+            amountInWei,
+            releaseTimeDays,
+            beneficiary
+        );
+
+        assertTrue(vaultAddress != address(0));
+        assertTrue(vaultFactory.isValidVault(vaultAddress));
+    }
+
+    /******************************************************************************
+     *                         exact fee — no refund sent                         *
+     ******************************************************************************/
+
+    function testFuzzNonRefundOnExactFee(
+        uint256 releaseTimeDays
+    ) public isCreator {
+        releaseTimeDays = bound(
+            releaseTimeDays,
+            MIN_RELEASE_DAYS,
+            MAX_RELEASE_DAYS
+        );
+
+        address[] memory _beneficiary = _createNthBeneficiary(4);
+        uint256 balanceBefore = CREATOR.balance;
+
+        vaultFactory.createVault{value: CREATION_FEE}(
+            VALID_FUND,
+            releaseTimeDays,
+            _beneficiary
+        );
+
+        assertEq(CREATOR.balance, balanceBefore - CREATION_FEE);
+    }
+
+    /******************************************************************************
+     *                       vault counter increments by 1                        *
+     ******************************************************************************/
+
+    function testFuzzCreateVaultCounterIncrement(
+        uint256 amountInWei,
+        uint256 releaseTimeDays,
+        uint256 numBeneficiaries
+    ) public isCreator {
+        amountInWei = bound(amountInWei, MINIMUM_FEE, MAXIMUM_FEE);
+
+        releaseTimeDays = bound(
+            releaseTimeDays,
+            MIN_RELEASE_DAYS,
+            MAX_RELEASE_DAYS
+        );
+
+        numBeneficiaries = bound(
+            numBeneficiaries,
+            MIN_NUMBER_OF_BENEFICIAY,
+            MAX_NUMBER_OF_BENEFICIAY
+        );
+
+        address[] memory beneficiary = _createNthBeneficiary(numBeneficiaries);
+
+        uint256 counterBefore = vaultFactory.getVaultCount();
+
+        vaultFactory.createVault{value: CREATION_FEE}(
+            amountInWei,
+            releaseTimeDays,
+            beneficiary
+        );
+
+        assertEq(vaultFactory.getVaultCount(), counterBefore + 1);
+    }
+
+    /******************************************************************************
+     *                               Invalid paths                                *
+     ******************************************************************************/
+
+    /******************************************************************************
+     *                     revert: insufficient creation fee                      *
+     ******************************************************************************/
+
+    function testFuzzCreateVaultWithInsuffcientCreationFee(
+        uint256 creationFee
+    ) public isCreator {
+        creationFee = bound(creationFee, 0, CREATION_FEE - 1);
+
+        address[] memory _beneficiary = _createNthBeneficiary(1);
+
+        vm.expectRevert(
+            VaultFactory.VaultFactory__InsuffcientCreationFee.selector
+        );
+        vaultFactory.createVault{value: creationFee}(
+            VALID_FUND,
+            VALID_DURATION,
+            _beneficiary
+        );
+    }
+
+    /******************************************************************************
+     *                        revert: amount below minimum                        *
+     ******************************************************************************/
+
+    function testFuzzCreateVaultWithBelowAmount(
+        uint256 amountInWei
+    ) public isCreator {
+        amountInWei = bound(amountInWei, 1, MINIMUM_FEE - 1);
+
+        address[] memory _beneficiary = _createNthBeneficiary(1);
+
+        vm.expectRevert(VaultFactory.VaultFactory__LessThanMinimumEth.selector);
+
+        vaultFactory.createVault{value: CREATION_FEE}(
+            amountInWei,
+            VALID_DURATION,
+            _beneficiary
+        );
+    }
+
+    /******************************************************************************
+     *                 revert: release time too early (1–10 days)                  *
+     ******************************************************************************/
+
+    function testFuzzCreateVaultWithEarlyReleaseTime(
+        uint256 releaseTimeDays
+    ) public isCreator {
+        releaseTimeDays = bound(releaseTimeDays, 1, 10);
+
+        address[] memory _beneficiary = _createNthBeneficiary(1);
+
+        vm.expectRevert(
+            VaultFactory.VaultFactory__RealeaseTimeTooEarly.selector
+        );
+
+        vaultFactory.createVault{value: CREATION_FEE}(
+            VALID_FUND,
+            releaseTimeDays,
+            _beneficiary
+        );
+    }
+
+    /******************************************************************************
+     *                   revert: too many beneficiaries (>= 10)                   *
+     ******************************************************************************/
+
+    function testFuzzCreateVaultWithTooManyBeneficiaries(
+        uint256 numBeneficiaries
+    ) public isCreator {
+        numBeneficiaries = bound(numBeneficiaries, 10, 20);
+
+        address[] memory _beneficiary = _createNthBeneficiary(numBeneficiaries);
+
+        vm.expectRevert(
+            VaultFactory.VaultFactory__BeneficiaryMaxAmountReached.selector
+        );
+
+        vaultFactory.createVault{value: CREATION_FEE}(
+            VALID_FUND,
+            VALID_DURATION,
+            _beneficiary
+        );
+    }
+
+    /******************************************************************************
+     *                      revert: zero address beneficiary                      *
+     ******************************************************************************/
+
+    function testFuzzWithZeroAddressBeneficiaries(
+        uint256 zeroIndex
+    ) public isCreator {
+        zeroIndex = bound(zeroIndex, 0, 2); //inject zero addr at index 0–2
+
+        address[] memory _beneficiary = _createNthBeneficiary(4);
+        _beneficiary[zeroIndex] = address(0); //poison 1 slot
+
+        vm.expectRevert(
+            VaultFactory.VaultFactory__ZeroAddressBeneficiary.selector
+        );
+
+        vaultFactory.createVault{value: CREATION_FEE}(
+            VALID_FUND,
+            VALID_DURATION,
+            _beneficiary
+        );
+    }
+
+    /******************************************************************************
+     *                        revert: duplicate beneficiary                        *
+     ******************************************************************************/
+
+    function testFuzzCreateVaultWithDupplicateBeneficiary(
+        address duplicate
+    ) public isCreator {
+        vm.assume(duplicate != address(0));
+        address[] memory _beneficiary = _createNthBeneficiary(4);
+
+        _beneficiary[0] = duplicate;
+        _beneficiary[2] = duplicate;
+
+        vm.expectRevert(
+            VaultFactory.VaultFactory__DuplicateBeneficiaryAdded.selector
+        );
+
+        vaultFactory.createVault{value: CREATION_FEE}(
+            VALID_FUND,
+            VALID_DURATION,
+            _beneficiary
+        );
+    }
+
+    /******************************************************************************
+     *               HELPER: generate N distinct non-zero addresses               *
+     ******************************************************************************/
+    function _createNthBeneficiary(
+        uint256 nLength
+    ) internal pure returns (address[] memory arr) {
+        arr = new address[](nLength);
+        for (uint256 i = 0; i < nLength; i++) {
+            arr[i] = vm.addr(i + 1);
+        }
+        return arr;
     }
 }
