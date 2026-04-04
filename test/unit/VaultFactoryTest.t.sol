@@ -12,9 +12,10 @@ contract VaultFactoryTest is Test {
     uint256 constant STARTING_BALANCE = 10 ether;
     uint256 constant CREATION_FEE = 1000000000000000;
     uint256 constant MINIMUM_FEE = 0.01 ether;
-    uint256 constant MIN_FEE = 0.1 ether;
+
     uint256 constant MAXIMUM_FEE = 100 ether;
     uint256 constant VALID_FUND = 4 ether;
+    uint256 constant BASE_LINK_AMOUNT = 4;
 
     uint256 constant MIN_RELEASE_DAYS = 11;
     uint256 constant MAX_RELEASE_DAYS = 3650;
@@ -57,9 +58,11 @@ contract VaultFactoryTest is Test {
      *                                Invalid path                                *
      ******************************************************************************/
 
-    // test creating vault without creation fee ---------------------------------
+    /******************************************************************************
+     *                        Revert: when no creation fee                        *
+     ******************************************************************************/
 
-    function testCreateVaultWithoutCreationFee()
+    function test_CreateVault_RevertsWithoutCreationFee()
         public
         isCreator
         addBeneficiary
@@ -70,14 +73,17 @@ contract VaultFactoryTest is Test {
 
         vaultFactory.createVault{value: 0}(
             VALID_FUND,
+            BASE_LINK_AMOUNT,
             VALID_DURATION,
             beneficiaries
         );
     }
 
-    // test creating vault without vault amount ---------------------------------
+    /******************************************************************************
+     *                        Revert: when amount is invalid (amount = 0)                    *
+     ******************************************************************************/
 
-    function testCreateVaultWithoutValidAmount()
+    function test_CreateVault_RevertZeroValueAmount()
         public
         isCreator
         addBeneficiary
@@ -86,14 +92,17 @@ contract VaultFactoryTest is Test {
 
         vaultFactory.createVault{value: CREATION_FEE}(
             0,
+            BASE_LINK_AMOUNT,
             VALID_DURATION,
             beneficiaries
         );
     }
 
-    // test creating vault with less than minimum amount ---------------------------------
+    /******************************************************************************
+     *                        Revert: when amount is less than mininmu                       *
+     ******************************************************************************/
 
-    function testCreateVaultWithoutLessThanMinimunAmount()
+    function test_CreateVault_RevertsWhenAmountIsLessThanMinimumEth()
         public
         isCreator
         addBeneficiary
@@ -102,14 +111,17 @@ contract VaultFactoryTest is Test {
 
         vaultFactory.createVault{value: CREATION_FEE}(
             0.001 ether,
+            BASE_LINK_AMOUNT,
             VALID_DURATION,
             beneficiaries
         );
     }
 
-    // test creating vault with invalid release time ---------------------------------
+    /******************************************************************************
+     *                        Revert: when release time in days is invalid                        *
+     ******************************************************************************/
 
-    function testCreateVaultWithInvalidReleaseTime()
+    function test_CreateVault_RevertsWhenReleaseTimeIsInvalid()
         public
         isCreator
         addBeneficiary
@@ -121,14 +133,17 @@ contract VaultFactoryTest is Test {
 
         vaultFactory.createVault{value: CREATION_FEE}(
             VALID_FUND,
+            BASE_LINK_AMOUNT,
             invalidReleaseTime,
             beneficiaries
         );
     }
 
-    // test creating vault with release time too close ---------------------------------
+    /******************************************************************************
+     *                        Revert: when release time in days is too close (0-10 days)                        *
+     ******************************************************************************/
 
-    function testCreateVaultWithReleaseTimeTooClose()
+    function test_CreateVault_RevertsWhenReleaseTimeTooClose()
         public
         isCreator
         addBeneficiary
@@ -140,29 +155,40 @@ contract VaultFactoryTest is Test {
 
         vaultFactory.createVault{value: CREATION_FEE}(
             VALID_FUND,
+            BASE_LINK_AMOUNT,
             earlyReleaseTime,
             beneficiaries
         );
     }
 
-    // test creating vault with empty or no beneficiary ---------------------------------
+    /******************************************************************************
+     *                        Revert: when there is no beneficiary                        *
+     ******************************************************************************/
 
-    function testCreateVaultWithEmptyBeneficiary() public isCreator {
+    function test_CreateVault_RevertsWhenThereIsNoBeneficiary()
+        public
+        isCreator
+    {
         address[] memory _beneficiaries;
 
         vm.expectRevert(VaultFactory.VaultFactory__NoBeneficiaryAdded.selector);
 
         vaultFactory.createVault{value: CREATION_FEE}(
             VALID_FUND,
+            BASE_LINK_AMOUNT,
             VALID_DURATION,
             _beneficiaries
         );
     }
 
-    // test creating vault with max number of beneficiary  ---------------------------------
-    // max beneficiary= 10
+    /******************************************************************************
+     *                        Revert: too many beneficiaries (>= 10)                        *
+     ******************************************************************************/
 
-    function testCreateVaultWithMoreThanTenBeneficiary() public isCreator {
+    function test_CreateVault_RevertsWhenThereIsTooManyBeneficiaries()
+        public
+        isCreator
+    {
         for (uint256 i = 0; i < 10; i++) {
             address user = vm.addr(i + 1);
 
@@ -176,6 +202,7 @@ contract VaultFactoryTest is Test {
 
         vaultFactory.createVault{value: CREATION_FEE}(
             VALID_FUND,
+            BASE_LINK_AMOUNT,
             VALID_DURATION,
             beneficiarieslst
         );
@@ -183,9 +210,11 @@ contract VaultFactoryTest is Test {
         delete beneficiarieslst; //reset the array in storage
     }
 
-    // test creating vault with duplicate beneficiary ---------------------------------
+    /******************************************************************************
+     *                        Revert: duplicate beneficiary                       *
+     ******************************************************************************/
 
-    function testCreateVaultWithDuplicateBeneficiary() public isCreator {
+    function test_CreateVault_RevertsDuplicateBeneficiary() public isCreator {
         beneficiarieslst.push(USER1);
         beneficiarieslst.push(USER2);
         beneficiarieslst.push(USER1);
@@ -198,15 +227,18 @@ contract VaultFactoryTest is Test {
 
         vaultFactory.createVault{value: CREATION_FEE}(
             VALID_FUND,
+            BASE_LINK_AMOUNT,
             VALID_DURATION,
             beneficiarieslst
         );
         delete beneficiarieslst;
     }
 
-    // test creating vault with zero address beneficiary---------------------------------
+    /******************************************************************************
+     *                        Revert: zero address beneficiary                       *
+     ******************************************************************************/
 
-    function testCreateVaultWithZeroAddressBeneficiary() public isCreator {
+    function test_CreateVault_RevertZeroAddressBeneficiary() public isCreator {
         beneficiarieslst.push(address(0));
 
         vm.expectRevert(
@@ -215,19 +247,23 @@ contract VaultFactoryTest is Test {
 
         vaultFactory.createVault{value: CREATION_FEE}(
             VALID_FUND,
+            BASE_LINK_AMOUNT,
             VALID_DURATION,
             beneficiarieslst
         );
         delete beneficiarieslst;
     }
 
-    // test beneficiary is added when creating vault ---------------------------------
+    /******************************************************************************
+     *                        Benrficiary added sucessfully                       *
+     ******************************************************************************/
 
-    function testCreateVaultBeneficiaryAdded() public isCreator {
+    function test_CreateVault_BeneficiaryAdded() public isCreator {
         beneficiarieslst.push(USER1);
 
         vaultFactory.createVault{value: CREATION_FEE}(
             VALID_FUND,
+            BASE_LINK_AMOUNT,
             VALID_DURATION,
             beneficiarieslst
         );
@@ -237,13 +273,16 @@ contract VaultFactoryTest is Test {
         delete beneficiarieslst;
     }
 
-    // test is invalid beneficiary is added to vault ---------------------------------
+    /******************************************************************************
+     *                        test if invalid beneficiary is added                      *
+     ******************************************************************************/
 
-    function testCreateVaultWithInvalidBeneficiary() public isCreator {
+    function test_CreateVault_IsUserBeneficiary() public isCreator {
         beneficiarieslst.push(USER1);
 
         vaultFactory.createVault{value: CREATION_FEE}(
             VALID_FUND,
+            BASE_LINK_AMOUNT,
             VALID_DURATION,
             beneficiarieslst
         );
@@ -254,14 +293,17 @@ contract VaultFactoryTest is Test {
     }
 
     /******************************************************************************
-     *                               Success Paths                                *
+     *                               Happy Paths                                   *
      ******************************************************************************/
 
-    // test creating vault was successful ---------------------------------
+    /******************************************************************************
+     *                        test if vault was created successfully                      *
+     ******************************************************************************/
 
-    function testCreateVaultSuccessfully() public isCreator addBeneficiary {
+    function test_CreateVault_Successfully() public isCreator addBeneficiary {
         vaultFactory.createVault{value: CREATION_FEE}(
             VALID_FUND,
+            BASE_LINK_AMOUNT,
             VALID_DURATION,
             beneficiaries
         );
@@ -274,9 +316,11 @@ contract VaultFactoryTest is Test {
         assertTrue(vaultFactory.isValidVault(vaultAddress));
     }
 
-    // test creating vault events are emitted successful ---------------------------------
+    /******************************************************************************
+     *                        test if create vault emit events                     *
+     ******************************************************************************/
 
-    function testCreateVaultEmitEventSuccessfully()
+    function test_CreateVault_EmitEventSuccessfully()
         public
         isCreator
         addBeneficiary
@@ -287,20 +331,24 @@ contract VaultFactoryTest is Test {
 
         vaultFactory.createVault{value: CREATION_FEE}(
             VALID_FUND,
+            BASE_LINK_AMOUNT,
             VALID_DURATION,
             beneficiaries
         );
     }
 
-    // test created vault info are saved correctly ---------------------------------
+    /******************************************************************************
+     *                        test if vault info are saved correctly                      *
+     ******************************************************************************/
 
-    function testCreateVaultSavesVaultInfoCorrectly()
+    function test_CreateVault_SavesVaultInfoCorrectly()
         public
         isCreator
         addBeneficiary
     {
         vaultFactory.createVault{value: CREATION_FEE}(
             VALID_FUND,
+            BASE_LINK_AMOUNT,
             VALID_DURATION,
             beneficiaries
         );
@@ -315,9 +363,11 @@ contract VaultFactoryTest is Test {
         assertTrue(_vaultInfo.releaseTime > block.timestamp);
     }
 
-    // test multiple creation of vault is successfull ---------------------------------
+    /******************************************************************************
+     *                        test create multiple vault                           *
+     ******************************************************************************/
 
-    function testCreateMutipleVault() public isCreator {
+    function test_CreateMutipleVault() public isCreator {
         uint256 vaultCount = 3;
 
         address[] memory _beneficiaries = new address[](1);
@@ -329,6 +379,7 @@ contract VaultFactoryTest is Test {
 
             vaultFactory.createVault{value: CREATION_FEE}(
                 VALID_FUND,
+                BASE_LINK_AMOUNT,
                 VALID_DURATION,
                 _beneficiaries
             );
@@ -341,14 +392,21 @@ contract VaultFactoryTest is Test {
         );
     }
 
-    // test created vault refund excess creation fee ---------------------------------
+    /******************************************************************************
+     *                        refund excess creation fee                           *
+     ******************************************************************************/
 
-    function testCreateVaultRefundExcessFees() public isCreator addBeneficiary {
+    function test_CreateVault_RefundExcessFees()
+        public
+        isCreator
+        addBeneficiary
+    {
         uint256 excessFee = 1000000000000000;
         uint256 initialBalance = CREATOR.balance;
 
         vaultFactory.createVault{value: CREATION_FEE + excessFee}(
             VALID_FUND,
+            BASE_LINK_AMOUNT,
             VALID_DURATION,
             beneficiaries
         );
@@ -358,9 +416,12 @@ contract VaultFactoryTest is Test {
         assertEq(initialBalance - balanceAfter, CREATION_FEE);
     }
 
-    // test refund fail when caller cannot receive the excess creation fee ---------------------------------
+    /******************************************************************************
+     *                       revert: refund of creation fee fail                      *
+     ******************************************************************************/
+    /**@dev refund fail when caller cannot receive the excess creation fee */
 
-    function testCreateVaultRefundFailWhenCallerCannotReceiveEth() public {
+    function test_CreateVault_RefundFailWhenCallerCannotReceiveEth() public {
         uint256 excessFee = 10000000000000000;
 
         address[] memory _beneficiaries = new address[](1);
@@ -377,6 +438,7 @@ contract VaultFactoryTest is Test {
         rejecter.rejectExcess(
             vaultFactory,
             VALID_FUND,
+            BASE_LINK_AMOUNT,
             VALID_DURATION,
             _beneficiaries,
             CREATION_FEE + excessFee
@@ -386,11 +448,11 @@ contract VaultFactoryTest is Test {
     /******************************************************************************
      *                            test view functions                             *
      ******************************************************************************/
-    // test created vault is from the vaultfactory ---------------------------------
 
-    function testVaultisFactory() public isCreator addBeneficiary {
+    function test_VaultisFactory() public isCreator addBeneficiary {
         vaultFactory.createVault{value: CREATION_FEE}(
             VALID_FUND,
+            BASE_LINK_AMOUNT,
             VALID_DURATION,
             beneficiaries
         );
@@ -410,9 +472,9 @@ contract VaultFactoryTest is Test {
      *                         Success Path fuzz testing                          *
      ******************************************************************************/
 
-    /**dev All inputs are valid; vault must be created successfully */
+    /**@dev All inputs are valid; vault must be created successfully */
 
-    function testFuzzCreateVault(
+    function testFuzz_CreateVault(
         uint256 amountInWei,
         uint256 releaseTimeDays,
         uint256 numBeneficiaries
@@ -435,6 +497,7 @@ contract VaultFactoryTest is Test {
 
         address vaultAddress = vaultFactory.createVault{value: CREATION_FEE}(
             amountInWei,
+            BASE_LINK_AMOUNT,
             releaseTimeDays,
             beneficiary
         );
@@ -447,7 +510,7 @@ contract VaultFactoryTest is Test {
      *                         exact fee — no refund sent                         *
      ******************************************************************************/
 
-    function testFuzzNonRefundOnExactFee(
+    function testFuzz_CreateVault_NonRefundOnExactFee(
         uint256 releaseTimeDays
     ) public isCreator {
         releaseTimeDays = bound(
@@ -461,6 +524,7 @@ contract VaultFactoryTest is Test {
 
         vaultFactory.createVault{value: CREATION_FEE}(
             VALID_FUND,
+            BASE_LINK_AMOUNT,
             releaseTimeDays,
             _beneficiary
         );
@@ -472,7 +536,7 @@ contract VaultFactoryTest is Test {
      *                       vault counter increments by 1                        *
      ******************************************************************************/
 
-    function testFuzzCreateVaultCounterIncrement(
+    function testFuzz_CreateVault_CounterIncrement(
         uint256 amountInWei,
         uint256 releaseTimeDays,
         uint256 numBeneficiaries
@@ -497,6 +561,7 @@ contract VaultFactoryTest is Test {
 
         vaultFactory.createVault{value: CREATION_FEE}(
             amountInWei,
+            BASE_LINK_AMOUNT,
             releaseTimeDays,
             beneficiary
         );
@@ -512,7 +577,7 @@ contract VaultFactoryTest is Test {
      *                     revert: insufficient creation fee                      *
      ******************************************************************************/
 
-    function testFuzzCreateVaultWithInsuffcientCreationFee(
+    function testFuzz_CreateVault_RevertWhenInsuffcientCreationFee(
         uint256 creationFee
     ) public isCreator {
         creationFee = bound(creationFee, 0, CREATION_FEE - 1);
@@ -524,6 +589,7 @@ contract VaultFactoryTest is Test {
         );
         vaultFactory.createVault{value: creationFee}(
             VALID_FUND,
+            BASE_LINK_AMOUNT,
             VALID_DURATION,
             _beneficiary
         );
@@ -533,7 +599,7 @@ contract VaultFactoryTest is Test {
      *                        revert: amount below minimum                        *
      ******************************************************************************/
 
-    function testFuzzCreateVaultWithBelowAmount(
+    function testFuzz_CreateVault_RevertBelowMinimumAmount(
         uint256 amountInWei
     ) public isCreator {
         amountInWei = bound(amountInWei, 1, MINIMUM_FEE - 1);
@@ -544,6 +610,7 @@ contract VaultFactoryTest is Test {
 
         vaultFactory.createVault{value: CREATION_FEE}(
             amountInWei,
+            BASE_LINK_AMOUNT,
             VALID_DURATION,
             _beneficiary
         );
@@ -553,7 +620,7 @@ contract VaultFactoryTest is Test {
      *                 revert: release time too early (1–10 days)                  *
      ******************************************************************************/
 
-    function testFuzzCreateVaultWithEarlyReleaseTime(
+    function testFuzz_CreateVault_RevertWhenEarlyReleaseTime(
         uint256 releaseTimeDays
     ) public isCreator {
         releaseTimeDays = bound(releaseTimeDays, 1, 10);
@@ -566,6 +633,7 @@ contract VaultFactoryTest is Test {
 
         vaultFactory.createVault{value: CREATION_FEE}(
             VALID_FUND,
+            BASE_LINK_AMOUNT,
             releaseTimeDays,
             _beneficiary
         );
@@ -575,7 +643,7 @@ contract VaultFactoryTest is Test {
      *                   revert: too many beneficiaries (>= 10)                   *
      ******************************************************************************/
 
-    function testFuzzCreateVaultWithTooManyBeneficiaries(
+    function testFuzz_CreateVault_RevertTooManyBeneficiaries(
         uint256 numBeneficiaries
     ) public isCreator {
         numBeneficiaries = bound(numBeneficiaries, 10, 20);
@@ -588,6 +656,7 @@ contract VaultFactoryTest is Test {
 
         vaultFactory.createVault{value: CREATION_FEE}(
             VALID_FUND,
+            BASE_LINK_AMOUNT,
             VALID_DURATION,
             _beneficiary
         );
@@ -597,7 +666,7 @@ contract VaultFactoryTest is Test {
      *                      revert: zero address beneficiary                      *
      ******************************************************************************/
 
-    function testFuzzWithZeroAddressBeneficiaries(
+    function testFuzz_CreateVault_RevertsZeroAddressBeneficiaries(
         uint256 zeroIndex
     ) public isCreator {
         zeroIndex = bound(zeroIndex, 0, 2); //inject zero addr at index 0–2
@@ -611,6 +680,7 @@ contract VaultFactoryTest is Test {
 
         vaultFactory.createVault{value: CREATION_FEE}(
             VALID_FUND,
+            BASE_LINK_AMOUNT,
             VALID_DURATION,
             _beneficiary
         );
@@ -620,7 +690,7 @@ contract VaultFactoryTest is Test {
      *                        revert: duplicate beneficiary                        *
      ******************************************************************************/
 
-    function testFuzzCreateVaultWithDupplicateBeneficiary(
+    function testFuzz_CreateVault_RevertWhenDupplicateBeneficiary(
         address duplicate
     ) public isCreator {
         vm.assume(duplicate != address(0));
@@ -635,6 +705,7 @@ contract VaultFactoryTest is Test {
 
         vaultFactory.createVault{value: CREATION_FEE}(
             VALID_FUND,
+            BASE_LINK_AMOUNT,
             VALID_DURATION,
             _beneficiary
         );

@@ -16,3 +16,4 @@ docs/
 .env
 .states/
 coverage.txt
+.deps/

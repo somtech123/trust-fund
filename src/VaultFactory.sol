@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 pragma solidity ^0.8.24;
+import {LinkTokenInterface} from "@chainlink/contracts/src/v0.8/shared/interfaces/LinkTokenInterface.sol";
 import {Vault} from "./Vault.sol";
 
 /**
@@ -34,6 +35,8 @@ contract VaultFactory {
     mapping(address => bool) private sIsVault;
     mapping(address => address) private sIsFactory;
 
+    LinkTokenInterface public immutable i_link;
+
     /******************************************************************************
      *                                   Errors                                   *
      ******************************************************************************/
@@ -58,19 +61,25 @@ contract VaultFactory {
         uint256 counter
     );
 
+    constructor(address _linkToken) {
+        i_link = LinkTokenInterface(_linkToken);
+    }
+
     /******************************************************************************
      *                             External Functions                             *
      ******************************************************************************/
 
     function createVault(
         uint256 amountInWei,
+        uint256 linkAmount,
         uint256 releaseTime,
         address[] calldata beneficiaries
     ) external payable returns (address) {
         address sender = msg.sender;
         uint256 value = msg.value;
 
-        // uint256 amountInWei = UnitConverter.ethToWeiConverter(amount);
+        // i_link.transferFrom(msg.sender, address(this), linkAmount);
+
         uint256 _releaseTime = releaseTime * 1 days;
 
         if (value < CREATION_FEE) revert VaultFactory__InsuffcientCreationFee();
@@ -98,6 +107,7 @@ contract VaultFactory {
 
         Vault _vault = new Vault(
             sender,
+            address(this),
             amountInWei,
             block.timestamp + _releaseTime,
             beneficiaries
@@ -118,7 +128,12 @@ contract VaultFactory {
 
         svaultCounter++;
 
-        emit CreatedVault(sender, amountInWei, svaultCounter);
+        emit CreatedVault(
+            sender,
+            amountInWei,
+            // block.timestamp + _releaseTime,
+            svaultCounter
+        );
 
         //refund any eth sent above sminimumEth
 

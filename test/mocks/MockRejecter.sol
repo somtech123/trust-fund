@@ -12,6 +12,7 @@ contract MockRejecter {
     function rejectExcess(
         VaultFactory vaultFactory,
         uint256 amountInWei,
+        uint256 linkAmount,
         uint256 releaseTime,
         address[] calldata beneficiaries,
         uint256 fees
@@ -19,6 +20,7 @@ contract MockRejecter {
         rejectEth = true;
         vaultFactory.createVault{value: fees}(
             amountInWei,
+            linkAmount,
             releaseTime,
             beneficiaries
         );
