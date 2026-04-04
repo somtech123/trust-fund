@@ -1,42 +1,27 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 pragma solidity ^0.8.24;
 
-contract MockLinkToken {
-    string public name = "Mock ChainLink Token";
-    string public symbol = "MLINK";
-    uint8 public decimals = 18;
-    uint256 public totalSupply;
+// // import {ERC20} from "@solmate/tokens/ERC20.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {Script, console} from "forge-std/Script.sol";
 
-    mapping(address => uint256) public balanceOf;
-    mapping(address => mapping(address => uint256)) public allowance;
+contract MockLinkToken is ERC20 {
+    uint256 constant INITIAL_SUPPLY = 1_000_000 ether;
+    uint8 constant DECIMALS = 18;
 
-    // Mint free LINK to anyone — only for testing
-    function mint(address to, uint256 amount) external returns (bool) {
-        allowance[msg.sender][to] = amount;
-        return true;
+    constructor() ERC20("LinkToken", "LINK") {
+        mint(address(this), INITIAL_SUPPLY);
     }
 
-    function approve(address spender, uint256 amount) external returns (bool) {
-        allowance[msg.sender][spender] = amount;
-       
-        return true;
+    function mint(address to, uint256 value) public {
+        super._mint(to, value);
     }
 
-    function transfer(address to, uint256 amount) external returns (bool) {
-        balanceOf[msg.sender] -= amount;
-        balanceOf[to] += amount;
-
-        return true;
-    }
-
-    function transferFrom(
-        address from,
-        address to,
-        uint256 amount
+    function setBalance(
+        address _address,
+        uint256 _value
     ) external returns (bool) {
-        allowance[from][msg.sender] -= amount;
-        balanceOf[from] -= amount;
-        balanceOf[to] += amount;
+        _transfer(address(this), _address, _value);
 
         return true;
     }

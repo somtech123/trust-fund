@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 import {Script} from "forge-std/Script.sol";
 import {MockLinkToken} from "../test/mocks/MockLinkToken.sol";
+import {MockAutomationRegistrar} from "../test/mocks/MockAutomationRegistrar.sol";
 
 abstract contract CodeConstants {
     uint256 public constant ETH_SEPOLIA_CHAIN_ID = 11155111;
@@ -13,6 +14,7 @@ contract HelperConfig is Script, CodeConstants {
 
     struct NetworkConfig {
         address linkAddress;
+        address upKeepRegistraddress;
     }
 
     NetworkConfig public localNetworkConfigs;
@@ -41,17 +43,21 @@ contract HelperConfig is Script, CodeConstants {
     function getSepoliaEthConfig() public pure returns (NetworkConfig memory) {
         return
             NetworkConfig({
-                linkAddress: 0x779877A7B0D9E8603169DdbD7836e478b4624789
+                linkAddress: 0x779877A7B0D9E8603169DdbD7836e478b4624789,
+                upKeepRegistraddress: 0xb0E49c5D0d05cbc241d68c05BC5BA1d1B7B72976
             });
     }
 
     function getOrCreateAnvilEthConfig() public returns (NetworkConfig memory) {
         // deploy mocks
-        // vm.startBroadcast();
-        MockLinkToken linkToken = new MockLinkToken();
-        // vm.stopBroadcast();
 
-        localNetworkConfigs = NetworkConfig({linkAddress: address(linkToken)});
+        MockLinkToken linkToken = new MockLinkToken();
+        MockAutomationRegistrar _mockRegistrar = new MockAutomationRegistrar();
+
+        localNetworkConfigs = NetworkConfig({
+            linkAddress: address(linkToken),
+            upKeepRegistraddress: address(_mockRegistrar)
+        });
 
         return localNetworkConfigs;
     }

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
+
 pragma solidity ^0.8.24;
 import {Test} from "forge-std/Test.sol";
 import {console} from "forge-std/console.sol";
@@ -33,12 +34,9 @@ contract VaultTest is Test {
         beneficiaries.push(USER2);
 
         vm.prank(CREATOR);
-        address vaultAddress = vaultFactory.createVault{value: CREATION_FEE}(
-            VALID_FUND,
-            BASE_LINK_AMOUNT,
-            VALID_DURATION,
-            beneficiaries
-        );
+        (address vaultAddress, ) = vaultFactory.createVault{
+            value: CREATION_FEE
+        }(VALID_FUND, BASE_LINK_AMOUNT, VALID_DURATION, beneficiaries);
 
         vault = Vault(vaultAddress);
     }

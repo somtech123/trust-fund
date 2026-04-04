@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
+
 pragma solidity ^0.8.24;
 import {Test} from "forge-std/Test.sol";
 import {console} from "forge-std/console.sol";
@@ -37,6 +38,8 @@ contract VaultFactoryTest is Test {
         DeployVault deployVault = new DeployVault();
 
         vaultFactory = deployVault.run();
+
+        console.log("=============================", address(vaultFactory));
 
         vm.deal(CREATOR, STARTING_BALANCE);
     }
@@ -495,12 +498,9 @@ contract VaultFactoryTest is Test {
 
         address[] memory beneficiary = _createNthBeneficiary(numBeneficiaries);
 
-        address vaultAddress = vaultFactory.createVault{value: CREATION_FEE}(
-            amountInWei,
-            BASE_LINK_AMOUNT,
-            releaseTimeDays,
-            beneficiary
-        );
+        (address vaultAddress, ) = vaultFactory.createVault{
+            value: CREATION_FEE
+        }(amountInWei, BASE_LINK_AMOUNT, releaseTimeDays, beneficiary);
 
         assertTrue(vaultAddress != address(0));
         assertTrue(vaultFactory.isValidVault(vaultAddress));
@@ -722,5 +722,17 @@ contract VaultFactoryTest is Test {
             arr[i] = vm.addr(i + 1);
         }
         return arr;
+    }
+
+    function test_registerAndPredictIDReturnId() public isCreator {
+        address[] memory _beneficiary = _createNthBeneficiary(4);
+        (, uint256 upkeepID) = vaultFactory.createVault{value: CREATION_FEE}(
+            VALID_FUND,
+            BASE_LINK_AMOUNT,
+            VALID_DURATION,
+            _beneficiary
+        );
+
+        assertGt(upkeepID, 0);
     }
 }

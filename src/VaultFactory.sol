@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 import {LinkTokenInterface} from "@chainlink/contracts/src/v0.8/shared/interfaces/LinkTokenInterface.sol";
 import {Vault} from "./Vault.sol";
+import {IKeeperRegistrar} from "./interface/IKeeperRegistry.sol";
 
 /**
  * @title Trust Fund Vault Factory
@@ -11,6 +12,11 @@ import {Vault} from "./Vault.sol";
  *         releaseTime are exressed in days
  */
 contract VaultFactory {
+    enum ApprovalState {
+        PENDING,
+        APPROVED
+    }
+
     /******************************************************************************
      *                              Struct                                         *
      ******************************************************************************/
@@ -36,6 +42,8 @@ contract VaultFactory {
     mapping(address => address) private sIsFactory;
 
     LinkTokenInterface public immutable i_link;
+    IKeeperRegistrar public immutable i_registrar;
+    ApprovalState private approvalState;
 
     /******************************************************************************
      *                                   Errors                                   *
@@ -50,6 +58,7 @@ contract VaultFactory {
     error VaultFactory__ZeroAddressBeneficiary();
     error VaultFactory__BeneficiaryMaxAmountReached();
     error VaultFactory__DuplicateBeneficiaryAdded();
+    error VaultFactory__RegistrationFailed();
 
     /******************************************************************************
      *                                   Events                                   *
@@ -61,20 +70,47 @@ contract VaultFactory {
         uint256 counter
     );
 
-    constructor(address _linkToken) {
+    constructor(address _linkToken, address _registerAddress) {
         i_link = LinkTokenInterface(_linkToken);
+        i_registrar = IKeeperRegistrar(_registerAddress);
     }
 
     /******************************************************************************
      *                             External Functions                             *
      ******************************************************************************/
 
+    function _registerAndPredictID(
+        address _vault
+    ) internal returns (uint256 upKeedID) {
+        // LINK must be approved for transfer (same comment as Chainlink example)
+        // taking link from the contract address
+        i_link.approve(address(i_registrar), address(this).balance);
+
+        //register the upkeep
+
+        upKeedID = IKeeperRegistrar(i_registrar).registerUpkeep(
+            IKeeperRegistrar.RegistrationParams({
+                name: string(abi.encodePacked("Vault", _toHex(_vault))),
+                encryptedEmail: bytes(""),
+                upkeepContract: _vault,
+                gasLimit: 500000,
+                adminAddress: address(this),
+                triggerType: 0, // 0 = conditional (checkUpkeep polling)
+                checkData: bytes(""),
+                triggerConfig: bytes(""),
+                offchainConfig: bytes(""),
+                amount: 1000000000000000 //amount of link paid for upkeep
+            })
+        );
+        if (upKeedID == 0) revert VaultFactory__RegistrationFailed();
+    }
+
     function createVault(
         uint256 amountInWei,
         uint256 linkAmount,
         uint256 releaseTime,
         address[] calldata beneficiaries
-    ) external payable returns (address) {
+    ) external payable returns (address, uint256 upkeepID) {
         address sender = msg.sender;
         uint256 value = msg.value;
 
@@ -115,6 +151,8 @@ contract VaultFactory {
 
         address _vaultAddr = address(_vault);
 
+        upkeepID = _registerAndPredictID(_vaultAddr);
+
         sVaultInfo[svaultCounter] = VaultInfo({
             vaultAddress: _vaultAddr,
             creatorAddress: sender,
@@ -143,7 +181,7 @@ contract VaultFactory {
             require(sucess, "Refund failed");
         }
 
-        return _vaultAddr;
+        return (_vaultAddr, upkeepID);
     }
 
     /******************************************************************************
@@ -172,5 +210,24 @@ contract VaultFactory {
 
     function getFactoryOf(address vaultAddress) public view returns (address) {
         return sIsFactory[vaultAddress];
+    }
+
+    /******************************************************************************
+     *                                  Helpers                                   *
+     ******************************************************************************/
+
+    function _toHex(address addr) internal pure returns (string memory) {
+        bytes memory hex_ = "0123456789abcdef";
+        bytes20 b = bytes20(addr);
+
+        //this function only converts first 4 bytes of the address, not the full 20 bytes.
+        bytes memory s = new bytes(10);
+        s[0] = "0";
+        s[1] = "x";
+        for (uint256 i = 0; i < 4; i++) {
+            s[2 + i * 2] = hex_[uint8(b[i]) >> 4];
+            s[3 + i * 2] = hex_[uint8(b[i]) & 0x0f];
+        }
+        return string(s);
     }
 }
