@@ -330,7 +330,7 @@ contract VaultFactoryTest is Test {
     {
         vm.expectEmit(true, false, false, true);
 
-        emit VaultFactory.CreatedVault(CREATOR, VALID_FUND, 1);
+        emit VaultFactory.CreatedVault(CREATOR, VALID_FUND, 1, 1);
 
         vaultFactory.createVault{value: CREATION_FEE}(
             VALID_FUND,
@@ -362,7 +362,7 @@ contract VaultFactoryTest is Test {
         assertTrue(_vaultInfo.creatorAddress == CREATOR);
 
         assertEq(_vaultInfo.amount, VALID_FUND);
-        assertTrue(_vaultInfo.isActive);
+        assertTrue(_vaultInfo.isAutomated);
         assertTrue(_vaultInfo.releaseTime > block.timestamp);
     }
 

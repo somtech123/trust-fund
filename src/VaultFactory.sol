@@ -25,7 +25,7 @@ contract VaultFactory {
         address vaultAddress;
         address creatorAddress;
         uint256 amount;
-        bool isActive;
+        bool isAutomated;
         uint256 releaseTime;
     }
 
@@ -67,7 +67,8 @@ contract VaultFactory {
     event CreatedVault(
         address indexed creator,
         uint256 amount,
-        uint256 counter
+        uint256 counter,
+        uint256 upKeepId
     );
 
     constructor(address _linkToken, address _registerAddress) {
@@ -79,32 +80,6 @@ contract VaultFactory {
      *                             External Functions                             *
      ******************************************************************************/
 
-    function _registerAndPredictID(
-        address _vault
-    ) internal returns (uint256 upKeedID) {
-        // LINK must be approved for transfer (same comment as Chainlink example)
-        // taking link from the contract address
-        i_link.approve(address(i_registrar), address(this).balance);
-
-        //register the upkeep
-
-        upKeedID = IKeeperRegistrar(i_registrar).registerUpkeep(
-            IKeeperRegistrar.RegistrationParams({
-                name: string(abi.encodePacked("Vault", _toHex(_vault))),
-                encryptedEmail: bytes(""),
-                upkeepContract: _vault,
-                gasLimit: 500000,
-                adminAddress: address(this),
-                triggerType: 0, // 0 = conditional (checkUpkeep polling)
-                checkData: bytes(""),
-                triggerConfig: bytes(""),
-                offchainConfig: bytes(""),
-                amount: 1000000000000000 //amount of link paid for upkeep
-            })
-        );
-        if (upKeedID == 0) revert VaultFactory__RegistrationFailed();
-    }
-
     function createVault(
         uint256 amountInWei,
         uint256 linkAmount,
@@ -114,10 +89,66 @@ contract VaultFactory {
         address sender = msg.sender;
         uint256 value = msg.value;
 
-        // i_link.transferFrom(msg.sender, address(this), linkAmount);
-
         uint256 _releaseTime = releaseTime * 1 days;
+        i_link.transferFrom(msg.sender, address(this), linkAmount);
 
+        _createVaultAuthentication(
+            value,
+            amountInWei,
+            _releaseTime,
+            beneficiaries
+        );
+
+        i_link.transferFrom(msg.sender, address(this), linkAmount);
+
+        Vault _vault = new Vault(
+            sender,
+            address(this),
+            amountInWei,
+            block.timestamp + _releaseTime,
+            beneficiaries
+        );
+
+        address _vaultAddr = address(_vault);
+
+        upkeepID = _registerAndPredictID(_vaultAddr);
+
+        sVaultInfo[svaultCounter] = VaultInfo({
+            vaultAddress: _vaultAddr,
+            creatorAddress: sender,
+            amount: amountInWei,
+            isAutomated: upkeepID == 0 ? false : true,
+            releaseTime: block.timestamp + _releaseTime
+        });
+
+        sIsVault[_vaultAddr] = true;
+        sIsFactory[_vaultAddr] = address(this);
+
+        svaultCounter++;
+
+        emit CreatedVault(sender, amountInWei, svaultCounter, upkeepID);
+
+        //refund any eth sent above sminimumEth
+
+        if (value > CREATION_FEE) {
+            uint256 refund = value - CREATION_FEE;
+            (bool sucess, ) = payable(sender).call{value: refund}("");
+            require(sucess, "Refund failed");
+        }
+
+        return (_vaultAddr, upkeepID);
+    }
+
+    /******************************************************************************
+     *                             internal functions                             *
+     ******************************************************************************/
+
+    function _createVaultAuthentication(
+        uint256 value,
+        uint256 amountInWei,
+        uint256 _releaseTime,
+        address[] calldata beneficiaries
+    ) internal {
         if (value < CREATION_FEE) revert VaultFactory__InsuffcientCreationFee();
         if (amountInWei == 0) revert VaultFactory__ZeroValueAmount();
         if (amountInWei < sminimumEth)
@@ -140,48 +171,33 @@ contract VaultFactory {
                 revert VaultFactory__DuplicateBeneficiaryAdded();
             isBeneficiaries[user] = true;
         }
+    }
 
-        Vault _vault = new Vault(
-            sender,
-            address(this),
-            amountInWei,
-            block.timestamp + _releaseTime,
-            beneficiaries
+    function _registerAndPredictID(
+        address _vault
+    ) internal returns (uint256 upKeedID) {
+        // LINK must be approved for transfer (same comment as Chainlink example)
+        // taking link from the contract address
+        uint96 linkAmount = 2000000000000000000;
+        i_link.approve(address(i_registrar), linkAmount);
+
+        //register the upkeep
+
+        upKeedID = IKeeperRegistrar(i_registrar).registerUpkeep(
+            IKeeperRegistrar.RegistrationParams({
+                name: string(abi.encodePacked("Vault", _toHex(_vault))),
+                encryptedEmail: bytes(""),
+                upkeepContract: _vault,
+                gasLimit: 500000,
+                adminAddress: msg.sender,
+                triggerType: 0, // 0 = conditional (checkUpkeep polling)
+                checkData: bytes(""),
+                triggerConfig: bytes(""),
+                offchainConfig: bytes(""),
+                amount: linkAmount //amount of link paid for upkeep
+            })
         );
-
-        address _vaultAddr = address(_vault);
-
-        upkeepID = _registerAndPredictID(_vaultAddr);
-
-        sVaultInfo[svaultCounter] = VaultInfo({
-            vaultAddress: _vaultAddr,
-            creatorAddress: sender,
-            amount: amountInWei,
-            isActive: true,
-            releaseTime: block.timestamp + _releaseTime
-        });
-
-        sIsVault[_vaultAddr] = true;
-        sIsFactory[_vaultAddr] = address(this);
-
-        svaultCounter++;
-
-        emit CreatedVault(
-            sender,
-            amountInWei,
-            // block.timestamp + _releaseTime,
-            svaultCounter
-        );
-
-        //refund any eth sent above sminimumEth
-
-        if (value > CREATION_FEE) {
-            uint256 refund = value - CREATION_FEE;
-            (bool sucess, ) = payable(sender).call{value: refund}("");
-            require(sucess, "Refund failed");
-        }
-
-        return (_vaultAddr, upkeepID);
+        if (upKeedID == 0) revert VaultFactory__RegistrationFailed();
     }
 
     /******************************************************************************
