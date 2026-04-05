@@ -17,6 +17,11 @@ contract VaultFactory {
         APPROVED
     }
 
+    enum LinkApprovalState {
+        PENDING,
+        APPROVED
+    }
+
     /******************************************************************************
      *                              Struct                                         *
      ******************************************************************************/
@@ -35,6 +40,7 @@ contract VaultFactory {
     uint256 private constant CREATION_FEE = 1000000000000000; // 0.001 eth
     uint256 private svaultCounter;
     uint256 private sminimumEth = 10000000000000000; // 0.01 eth
+    uint256 private s_minimumLink = 2000000000000000000; //2 link
 
     mapping(address => bool) private isBeneficiaries;
     mapping(uint256 => VaultInfo) private sVaultInfo;
@@ -44,6 +50,7 @@ contract VaultFactory {
     LinkTokenInterface public immutable i_link;
     IKeeperRegistrar public immutable i_registrar;
     ApprovalState private approvalState;
+    LinkApprovalState private linkApprovalState;
 
     /******************************************************************************
      *                                   Errors                                   *
@@ -59,6 +66,10 @@ contract VaultFactory {
     error VaultFactory__BeneficiaryMaxAmountReached();
     error VaultFactory__DuplicateBeneficiaryAdded();
     error VaultFactory__RegistrationFailed();
+    error VaultFactory__LinkApprovalDenied();
+    error VaultFactory__InsufficientAllowance();
+    error VaultFactory__LinkAmountLessThanMiniMumLink();
+    error VaultFactory__LinkNoTDepositedYet();
 
     /******************************************************************************
      *                                   Events                                   *
@@ -80,9 +91,31 @@ contract VaultFactory {
      *                             External Functions                             *
      ******************************************************************************/
 
+    function depositLinkToken(uint256 linkAmount) external returns (bool) {
+        linkApprovalState = LinkApprovalState.PENDING;
+
+        uint256 allowance = i_link.allowance(msg.sender, address(this));
+        if (allowance < linkAmount)
+            revert VaultFactory__InsufficientAllowance();
+
+        bool success = i_link.transferFrom(
+            msg.sender,
+            address(this),
+            linkAmount
+        );
+
+        if (!success) {
+            revert VaultFactory__LinkApprovalDenied();
+        }
+
+        linkApprovalState = LinkApprovalState.APPROVED;
+
+        return success;
+    }
+
     function createVault(
         uint256 amountInWei,
-        uint256 linkAmount,
+        uint256 linkAmountInWei,
         uint256 releaseTime,
         address[] calldata beneficiaries
     ) external payable returns (address, uint256 upkeepID) {
@@ -90,16 +123,14 @@ contract VaultFactory {
         uint256 value = msg.value;
 
         uint256 _releaseTime = releaseTime * 1 days;
-        i_link.transferFrom(msg.sender, address(this), linkAmount);
 
         _createVaultAuthentication(
             value,
             amountInWei,
+            linkAmountInWei,
             _releaseTime,
             beneficiaries
         );
-
-        i_link.transferFrom(msg.sender, address(this), linkAmount);
 
         Vault _vault = new Vault(
             sender,
@@ -146,10 +177,15 @@ contract VaultFactory {
     function _createVaultAuthentication(
         uint256 value,
         uint256 amountInWei,
+        uint256 linkAmountInWei,
         uint256 _releaseTime,
         address[] calldata beneficiaries
     ) internal {
         if (value < CREATION_FEE) revert VaultFactory__InsuffcientCreationFee();
+        if (linkAmountInWei < s_minimumLink)
+            revert VaultFactory__LinkAmountLessThanMiniMumLink();
+        if (linkApprovalState == LinkApprovalState.PENDING)
+            revert VaultFactory__LinkNoTDepositedYet();
         if (amountInWei == 0) revert VaultFactory__ZeroValueAmount();
         if (amountInWei < sminimumEth)
             revert VaultFactory__LessThanMinimumEth();
@@ -226,6 +262,14 @@ contract VaultFactory {
 
     function getFactoryOf(address vaultAddress) public view returns (address) {
         return sIsFactory[vaultAddress];
+    }
+
+    function getLinkAprovalState() public view returns (LinkApprovalState) {
+        return linkApprovalState;
+    }
+
+    function getLinkToken() external view returns (address) {
+        return address(i_link);
     }
 
     /******************************************************************************

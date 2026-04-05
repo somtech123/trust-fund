@@ -6,17 +6,20 @@ import {console} from "forge-std/console.sol";
 import {DeployVault} from "../../script/DeployVault.s.sol";
 import {VaultFactory} from "../../src/VaultFactory.sol";
 import {MockRejecter} from "../mocks/MockRejecter.sol";
+import {MockLinkToken, MockLinkTokenReturnsFalse} from "../mocks/MockLinkToken.sol";
 
 contract VaultFactoryTest is Test {
     VaultFactory vaultFactory;
+    MockLinkToken linkToken;
 
     uint256 constant STARTING_BALANCE = 10 ether;
     uint256 constant CREATION_FEE = 1000000000000000;
     uint256 constant MINIMUM_FEE = 0.01 ether;
+    uint256 constant MINIMUM_LINK = 2000000000000000000;
 
     uint256 constant MAXIMUM_FEE = 100 ether;
     uint256 constant VALID_FUND = 4 ether;
-    uint256 constant BASE_LINK_AMOUNT = 4;
+    uint256 constant BASE_LINK_AMOUNT = 2000000000000000000;
 
     uint256 constant MIN_RELEASE_DAYS = 11;
     uint256 constant MAX_RELEASE_DAYS = 3650;
@@ -39,6 +42,11 @@ contract VaultFactoryTest is Test {
 
         vaultFactory = deployVault.run();
 
+        // Point to the SAME token the factory was deployed with
+        linkToken = MockLinkToken(vaultFactory.getLinkToken());
+
+        linkToken.mint(CREATOR, STARTING_BALANCE);
+
         console.log("=============================", address(vaultFactory));
 
         vm.deal(CREATOR, STARTING_BALANCE);
@@ -54,6 +62,13 @@ contract VaultFactoryTest is Test {
         delete beneficiaries; // reset before each use
         beneficiaries.push(USER1);
         beneficiaries.push(USER2);
+        _;
+    }
+
+    modifier linkApprovedAndDeposited() {
+        linkToken.approve(address(vaultFactory), MINIMUM_LINK);
+        vaultFactory.depositLinkToken(MINIMUM_LINK);
+
         _;
     }
 
@@ -89,6 +104,7 @@ contract VaultFactoryTest is Test {
     function test_CreateVault_RevertZeroValueAmount()
         public
         isCreator
+        linkApprovedAndDeposited
         addBeneficiary
     {
         vm.expectRevert(VaultFactory.VaultFactory__ZeroValueAmount.selector);
@@ -108,6 +124,7 @@ contract VaultFactoryTest is Test {
     function test_CreateVault_RevertsWhenAmountIsLessThanMinimumEth()
         public
         isCreator
+        linkApprovedAndDeposited
         addBeneficiary
     {
         vm.expectRevert(VaultFactory.VaultFactory__LessThanMinimumEth.selector);
@@ -127,6 +144,7 @@ contract VaultFactoryTest is Test {
     function test_CreateVault_RevertsWhenReleaseTimeIsInvalid()
         public
         isCreator
+        linkApprovedAndDeposited
         addBeneficiary
     {
         uint256 invalidReleaseTime = 0;
@@ -149,6 +167,7 @@ contract VaultFactoryTest is Test {
     function test_CreateVault_RevertsWhenReleaseTimeTooClose()
         public
         isCreator
+        linkApprovedAndDeposited
         addBeneficiary
     {
         uint256 earlyReleaseTime = 9;
@@ -171,6 +190,7 @@ contract VaultFactoryTest is Test {
     function test_CreateVault_RevertsWhenThereIsNoBeneficiary()
         public
         isCreator
+        linkApprovedAndDeposited
     {
         address[] memory _beneficiaries;
 
@@ -191,6 +211,7 @@ contract VaultFactoryTest is Test {
     function test_CreateVault_RevertsWhenThereIsTooManyBeneficiaries()
         public
         isCreator
+        linkApprovedAndDeposited
     {
         for (uint256 i = 0; i < 10; i++) {
             address user = vm.addr(i + 1);
@@ -217,7 +238,11 @@ contract VaultFactoryTest is Test {
      *                        Revert: duplicate beneficiary                       *
      ******************************************************************************/
 
-    function test_CreateVault_RevertsDuplicateBeneficiary() public isCreator {
+    function test_CreateVault_RevertsDuplicateBeneficiary()
+        public
+        isCreator
+        linkApprovedAndDeposited
+    {
         beneficiarieslst.push(USER1);
         beneficiarieslst.push(USER2);
         beneficiarieslst.push(USER1);
@@ -241,7 +266,11 @@ contract VaultFactoryTest is Test {
      *                        Revert: zero address beneficiary                       *
      ******************************************************************************/
 
-    function test_CreateVault_RevertZeroAddressBeneficiary() public isCreator {
+    function test_CreateVault_RevertZeroAddressBeneficiary()
+        public
+        isCreator
+        linkApprovedAndDeposited
+    {
         beneficiarieslst.push(address(0));
 
         vm.expectRevert(
@@ -261,7 +290,11 @@ contract VaultFactoryTest is Test {
      *                        Benrficiary added sucessfully                       *
      ******************************************************************************/
 
-    function test_CreateVault_BeneficiaryAdded() public isCreator {
+    function test_CreateVault_BeneficiaryAdded()
+        public
+        isCreator
+        linkApprovedAndDeposited
+    {
         beneficiarieslst.push(USER1);
 
         vaultFactory.createVault{value: CREATION_FEE}(
@@ -280,7 +313,11 @@ contract VaultFactoryTest is Test {
      *                        test if invalid beneficiary is added                      *
      ******************************************************************************/
 
-    function test_CreateVault_IsUserBeneficiary() public isCreator {
+    function test_CreateVault_IsUserBeneficiary()
+        public
+        isCreator
+        linkApprovedAndDeposited
+    {
         beneficiarieslst.push(USER1);
 
         vaultFactory.createVault{value: CREATION_FEE}(
@@ -303,7 +340,12 @@ contract VaultFactoryTest is Test {
      *                        test if vault was created successfully                      *
      ******************************************************************************/
 
-    function test_CreateVault_Successfully() public isCreator addBeneficiary {
+    function test_CreateVault_Successfully()
+        public
+        isCreator
+        linkApprovedAndDeposited
+        addBeneficiary
+    {
         vaultFactory.createVault{value: CREATION_FEE}(
             VALID_FUND,
             BASE_LINK_AMOUNT,
@@ -326,6 +368,7 @@ contract VaultFactoryTest is Test {
     function test_CreateVault_EmitEventSuccessfully()
         public
         isCreator
+        linkApprovedAndDeposited
         addBeneficiary
     {
         vm.expectEmit(true, false, false, true);
@@ -347,6 +390,7 @@ contract VaultFactoryTest is Test {
     function test_CreateVault_SavesVaultInfoCorrectly()
         public
         isCreator
+        linkApprovedAndDeposited
         addBeneficiary
     {
         vaultFactory.createVault{value: CREATION_FEE}(
@@ -370,7 +414,11 @@ contract VaultFactoryTest is Test {
      *                        test create multiple vault                           *
      ******************************************************************************/
 
-    function test_CreateMutipleVault() public isCreator {
+    function test_CreateMutipleVault()
+        public
+        isCreator
+        linkApprovedAndDeposited
+    {
         uint256 vaultCount = 3;
 
         address[] memory _beneficiaries = new address[](1);
@@ -402,6 +450,7 @@ contract VaultFactoryTest is Test {
     function test_CreateVault_RefundExcessFees()
         public
         isCreator
+        linkApprovedAndDeposited
         addBeneficiary
     {
         uint256 excessFee = 1000000000000000;
@@ -424,18 +473,30 @@ contract VaultFactoryTest is Test {
      ******************************************************************************/
     /**@dev refund fail when caller cannot receive the excess creation fee */
 
-    function test_CreateVault_RefundFailWhenCallerCannotReceiveEth() public {
+    function test_CreateVault_RefundFailWhenCallerCannotReceiveEth()
+        public
+    // linkApprovedAndDeposited
+    {
         uint256 excessFee = 10000000000000000;
 
         address[] memory _beneficiaries = new address[](1);
         address user = vm.addr(1);
         _beneficiaries[0] = user;
 
-        MockRejecter rejecter = new MockRejecter();
+        address _USER = makeAddr("USER1");
 
+        MockRejecter rejecter = new MockRejecter(address(linkToken));
+        vm.startPrank(_USER);
+
+        vm.deal(_USER, STARTING_BALANCE);
         vm.deal(address(rejecter), STARTING_BALANCE);
+        linkToken.mint(_USER, STARTING_BALANCE);
 
-        vm.prank(address(rejecter));
+        console.log("++++++++++++++++++++++++", linkToken.balanceOf(_USER));
+
+        linkToken.approve(address(vaultFactory), MINIMUM_LINK);
+        vaultFactory.depositLinkToken(MINIMUM_LINK);
+
         vm.expectRevert("Refund failed");
 
         rejecter.rejectExcess(
@@ -446,13 +507,19 @@ contract VaultFactoryTest is Test {
             _beneficiaries,
             CREATION_FEE + excessFee
         );
+        vm.stopPrank();
     }
 
     /******************************************************************************
      *                            test view functions                             *
      ******************************************************************************/
 
-    function test_VaultisFactory() public isCreator addBeneficiary {
+    function test_VaultisFactory()
+        public
+        isCreator
+        linkApprovedAndDeposited
+        addBeneficiary
+    {
         vaultFactory.createVault{value: CREATION_FEE}(
             VALID_FUND,
             BASE_LINK_AMOUNT,
@@ -481,7 +548,7 @@ contract VaultFactoryTest is Test {
         uint256 amountInWei,
         uint256 releaseTimeDays,
         uint256 numBeneficiaries
-    ) public isCreator {
+    ) public isCreator linkApprovedAndDeposited {
         amountInWei = bound(amountInWei, MINIMUM_FEE, MAXIMUM_FEE);
 
         releaseTimeDays = bound(
@@ -512,7 +579,7 @@ contract VaultFactoryTest is Test {
 
     function testFuzz_CreateVault_NonRefundOnExactFee(
         uint256 releaseTimeDays
-    ) public isCreator {
+    ) public isCreator linkApprovedAndDeposited {
         releaseTimeDays = bound(
             releaseTimeDays,
             MIN_RELEASE_DAYS,
@@ -540,7 +607,7 @@ contract VaultFactoryTest is Test {
         uint256 amountInWei,
         uint256 releaseTimeDays,
         uint256 numBeneficiaries
-    ) public isCreator {
+    ) public isCreator linkApprovedAndDeposited {
         amountInWei = bound(amountInWei, MINIMUM_FEE, MAXIMUM_FEE);
 
         releaseTimeDays = bound(
@@ -579,7 +646,7 @@ contract VaultFactoryTest is Test {
 
     function testFuzz_CreateVault_RevertWhenInsuffcientCreationFee(
         uint256 creationFee
-    ) public isCreator {
+    ) public isCreator linkApprovedAndDeposited {
         creationFee = bound(creationFee, 0, CREATION_FEE - 1);
 
         address[] memory _beneficiary = _createNthBeneficiary(1);
@@ -601,7 +668,7 @@ contract VaultFactoryTest is Test {
 
     function testFuzz_CreateVault_RevertBelowMinimumAmount(
         uint256 amountInWei
-    ) public isCreator {
+    ) public isCreator linkApprovedAndDeposited {
         amountInWei = bound(amountInWei, 1, MINIMUM_FEE - 1);
 
         address[] memory _beneficiary = _createNthBeneficiary(1);
@@ -622,7 +689,7 @@ contract VaultFactoryTest is Test {
 
     function testFuzz_CreateVault_RevertWhenEarlyReleaseTime(
         uint256 releaseTimeDays
-    ) public isCreator {
+    ) public isCreator linkApprovedAndDeposited {
         releaseTimeDays = bound(releaseTimeDays, 1, 10);
 
         address[] memory _beneficiary = _createNthBeneficiary(1);
@@ -645,7 +712,7 @@ contract VaultFactoryTest is Test {
 
     function testFuzz_CreateVault_RevertTooManyBeneficiaries(
         uint256 numBeneficiaries
-    ) public isCreator {
+    ) public isCreator linkApprovedAndDeposited {
         numBeneficiaries = bound(numBeneficiaries, 10, 20);
 
         address[] memory _beneficiary = _createNthBeneficiary(numBeneficiaries);
@@ -668,7 +735,7 @@ contract VaultFactoryTest is Test {
 
     function testFuzz_CreateVault_RevertsZeroAddressBeneficiaries(
         uint256 zeroIndex
-    ) public isCreator {
+    ) public isCreator linkApprovedAndDeposited {
         zeroIndex = bound(zeroIndex, 0, 2); //inject zero addr at index 0–2
 
         address[] memory _beneficiary = _createNthBeneficiary(4);
@@ -692,7 +759,7 @@ contract VaultFactoryTest is Test {
 
     function testFuzz_CreateVault_RevertWhenDupplicateBeneficiary(
         address duplicate
-    ) public isCreator {
+    ) public isCreator linkApprovedAndDeposited {
         vm.assume(duplicate != address(0));
         address[] memory _beneficiary = _createNthBeneficiary(4);
 
@@ -724,7 +791,11 @@ contract VaultFactoryTest is Test {
         return arr;
     }
 
-    function test_registerAndPredictIDReturnId() public isCreator {
+    function test_registerAndPredictIDReturnId()
+        public
+        isCreator
+        linkApprovedAndDeposited
+    {
         address[] memory _beneficiary = _createNthBeneficiary(4);
         (, uint256 upkeepID) = vaultFactory.createVault{value: CREATION_FEE}(
             VALID_FUND,
@@ -734,5 +805,53 @@ contract VaultFactoryTest is Test {
         );
 
         assertGt(upkeepID, 0);
+    }
+
+    function test_DepositLink_RevertsIfUserDontApprove() public isCreator {
+        vm.expectRevert(
+            VaultFactory.VaultFactory__InsufficientAllowance.selector
+        );
+
+        vaultFactory.depositLinkToken(MINIMUM_LINK);
+    }
+
+    function test_DepositLink_RevertsIfAllowanceBelowMinimumLink()
+        public
+        isCreator
+    {
+        uint linkAmount = 10000;
+        vm.expectRevert(
+            VaultFactory.VaultFactory__InsufficientAllowance.selector
+        );
+
+        vaultFactory.depositLinkToken(linkAmount);
+    }
+
+    function test_DepositLink_StateNotPendingAfterRevert() public isCreator {
+        VaultFactory.LinkApprovalState beforeState = vaultFactory
+            .getLinkAprovalState();
+
+        vm.expectRevert(
+            VaultFactory.VaultFactory__InsufficientAllowance.selector
+        );
+
+        vaultFactory.depositLinkToken(MINIMUM_LINK);
+
+        assertEq(uint(vaultFactory.getLinkAprovalState()), uint(beforeState));
+    }
+
+    function test_DepositLink_Success() public isCreator {
+        linkToken.approve(address(vaultFactory), MINIMUM_LINK);
+
+        console.log("******************", linkToken.balanceOf(CREATOR));
+
+        bool result = vaultFactory.depositLinkToken(MINIMUM_LINK);
+
+        assertTrue(result);
+        assertEq(linkToken.balanceOf(address(vaultFactory)), MINIMUM_LINK);
+        assert(
+            vaultFactory.getLinkAprovalState() ==
+                VaultFactory.LinkApprovalState.APPROVED
+        );
     }
 }

@@ -15,6 +15,7 @@ contract MockLinkToken is ERC20 {
 
     function mint(address to, uint256 value) public {
         super._mint(to, value);
+        console.log("-------------------------user blance", balanceOf(to));
     }
 
     function setBalance(
@@ -24,5 +25,32 @@ contract MockLinkToken is ERC20 {
         _transfer(address(this), _address, _value);
 
         return true;
+    }
+
+    function approve(
+        address spender,
+        uint256 value
+    ) public override returns (bool) {
+        super.approve(spender, value);
+        return true;
+    }
+}
+
+contract MockLinkTokenReturnsFalse {
+    function allowance(address, address) external pure returns (uint256) {
+        return type(uint256).max; // always enough
+    }
+
+    function approve(address, uint256) public returns (bool) {
+        return true;
+    }
+
+    // ...but returns false on transfer
+    function transferFrom(
+        address,
+        address,
+        uint256
+    ) external pure returns (bool) {
+        return false;
     }
 }

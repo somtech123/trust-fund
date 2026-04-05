@@ -8,6 +8,6 @@ contract FundSubscription is Script, CodeConstants {
     uint256 public constant FUND_AMOUNT = 3 ether;
 
     function fundContract(address linkAddress, address contractAddress) public {
-        MockLinkToken(linkAddress).setBalance(contractAddress, FUND_AMOUNT);
+        // MockLinkToken(linkAddress).setBalance(contractAddress, FUND_AMOUNT);
     }
 }

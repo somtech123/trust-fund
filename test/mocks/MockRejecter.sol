@@ -4,6 +4,11 @@ import {VaultFactory} from "../../src/VaultFactory.sol";
 
 contract MockRejecter {
     bool public rejectEth;
+    address linkAddress;
+
+    constructor(address _address) {
+        linkAddress = _address;
+    }
 
     receive() external payable {
         if (rejectEth) revert("I reject Eth");

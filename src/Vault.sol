@@ -40,7 +40,6 @@ contract Vault is Ownable, AutomationCompatibleInterface, ReentrancyGuard {
 
     event Vault__UpKeepPerform(uint256 amount, uint256 beneficiariesLength);
     event Vault__Withdrawn(address indexed sender, uint256 amount);
-    
 
     constructor(
         address _creator,
@@ -64,7 +63,8 @@ contract Vault is Ownable, AutomationCompatibleInterface, ReentrancyGuard {
     }
 
     modifier onlyValidVault() {
-         if(!VaultFactory(FACTORY_ADDRESS).isValidVault(address(this))) revert Vault__InValidVault();
+        if (!VaultFactory(FACTORY_ADDRESS).isValidVault(address(this)))
+            revert Vault__InValidVault();
         _;
     }
 
@@ -109,24 +109,24 @@ contract Vault is Ownable, AutomationCompatibleInterface, ReentrancyGuard {
             uint256 payment = (i == beneficiariesLength - 1)
                 ? share + remainder
                 : share;
-            
+
             pendingWithdrawals[beneficiaries[i]] += payment;
         }
         emit Vault__UpKeepPerform(totalAmount, beneficiariesLength);
     }
 
     function withdraw() public nonReentrant onlyValidVault {
-        if(!VaultFactory(FACTORY_ADDRESS).isUserBeneficiary(msg.sender)) revert Vault__NotBeneficiary();
+        if (!VaultFactory(FACTORY_ADDRESS).isUserBeneficiary(msg.sender))
+            revert Vault__NotBeneficiary();
 
         uint256 payment = pendingWithdrawals[msg.sender];
-        if(payment == 0) revert Vault__NoPendingWithdrawal();
+        if (payment == 0) revert Vault__NoPendingWithdrawal();
 
         pendingWithdrawals[msg.sender] = 0;
         emit Vault__Withdrawn(msg.sender, payment);
 
-        (bool success,) = msg.sender.call{value: payment}('');
+        (bool success, ) = msg.sender.call{value: payment}("");
         require(success, "Transfer Failed");
-
     }
 
     /******************************************************************************
@@ -139,5 +139,15 @@ contract Vault is Ownable, AutomationCompatibleInterface, ReentrancyGuard {
 
     function getReleaseTimeStamp() public view returns (uint256) {
         return RELEASE_TIME;
+    }
+
+    function getVaultAmount() public view returns (uint256) {
+        return amount;
+    }
+
+    function getPendingWithdrawal(
+        address benefactor
+    ) public view returns (uint256) {
+        return pendingWithdrawals[benefactor];
     }
 }
