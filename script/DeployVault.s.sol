@@ -11,14 +11,14 @@ contract DeployVault is Script {
         HelperConfig helperConfig = new HelperConfig();
 
         HelperConfig.NetworkConfig memory config = helperConfig.getConfig();
-        FundSubscription _fund = new FundSubscription();
+        // FundSubscription _fund = new FundSubscription();
 
         VaultFactory vault = new VaultFactory(
             config.linkAddress,
             config.upKeepRegistraddress
         );
 
-        _fund.fundContract(config.linkAddress, address(vault));
+        // _fund.fundContract(config.linkAddress, address(vault));
 
         vm.stopBroadcast();
         return vault;

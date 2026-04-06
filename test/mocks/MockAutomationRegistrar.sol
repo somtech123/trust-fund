@@ -17,7 +17,7 @@ contract MockAutomationRegistrar {
 
     function registerUpkeep(
         RegistrationParams calldata params
-    ) external returns (uint256) {
+    ) external pure returns (uint256) {
         return 1;
     }
 }

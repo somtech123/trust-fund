@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 pragma solidity ^0.8.24;
 import {VaultFactory} from "../../src/VaultFactory.sol";
+import {Vault} from "../../src/Vault.sol";
 
 contract MockRejecter {
     bool public rejectEth;
@@ -29,5 +30,18 @@ contract MockRejecter {
             releaseTime,
             beneficiaries
         );
+    }
+}
+
+contract RejectVaultWithdrawal {
+    bool private rejectEth;
+
+    receive() external payable {
+        if (rejectEth) revert("I reject Eth");
+    }
+
+    function rejectVaultWithdrawal(Vault vault) external {
+        rejectEth = true;
+        vault.withdraw();
     }
 }

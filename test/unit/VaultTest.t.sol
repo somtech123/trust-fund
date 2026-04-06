@@ -9,11 +9,15 @@ import {Vault} from "../../src/Vault.sol";
 import {MockInvalidFactory} from "../mocks/MockFactory.sol";
 
 import {MockLinkToken, MockLinkTokenReturnsFalse} from "../mocks/MockLinkToken.sol";
+import {RejectVaultWithdrawal} from "../mocks/MockRejecter.sol";
+import {MockReentrancyAttack} from "../mocks/MockReentrancyAttack.sol";
 
 contract VaultTest is Test {
     VaultFactory vaultFactory;
     Vault vault;
     MockLinkToken linkToken;
+    RejectVaultWithdrawal rejecter;
+    MockReentrancyAttack mockReentrancyAttacker;
 
     uint256 constant STARTING_BALANCE = 10 ether;
     uint256 constant CREATION_FEE = 1000000000000000;
@@ -29,11 +33,20 @@ contract VaultTest is Test {
     address USER1 = makeAddr("USER1");
     address USER2 = makeAddr("USER2");
     address USER3 = makeAddr("USER3");
+    address USER4;
+    address ATTACKER;
 
     function setUp() external {
         DeployVault deployVault = new DeployVault();
 
         vaultFactory = deployVault.run();
+
+        rejecter = new RejectVaultWithdrawal();
+        mockReentrancyAttacker = new MockReentrancyAttack();
+
+        USER4 = address(rejecter);
+        ATTACKER = address(mockReentrancyAttacker);
+
         linkToken = MockLinkToken(vaultFactory.getLinkToken());
 
         vm.startPrank(CREATOR);
@@ -44,9 +57,14 @@ contract VaultTest is Test {
         vaultFactory.depositLinkToken(BASE_LINK_AMOUNT);
 
         vm.deal(CREATOR, STARTING_BALANCE);
+        vm.deal(USER4, STARTING_BALANCE);
+        vm.deal(ATTACKER, STARTING_BALANCE);
+
         beneficiaries.push(USER1);
         beneficiaries.push(USER2);
         beneficiaries.push(USER3);
+        beneficiaries.push(USER4);
+        beneficiaries.push(ATTACKER);
 
         (address vaultAddress, ) = vaultFactory.createVault{
             value: CREATION_FEE + VALID_FUND
@@ -55,6 +73,7 @@ contract VaultTest is Test {
         vm.stopPrank();
 
         vault = Vault(vaultAddress);
+        mockReentrancyAttacker.setVault(address(vault));
     }
 
     modifier prepareVaultForUpkeep() {
@@ -136,6 +155,50 @@ contract VaultTest is Test {
             VALID_FUND,
             VALID_DURATION,
             beneficiaries
+        );
+    }
+
+    function test_Vault_ConstructorRevertsifInvalidAmountFromPayableAmount()
+        public
+    {
+        uint256 invalidAount = VALID_FUND * 2;
+
+        vm.expectRevert(Vault.Vault__InvalidAmount.selector);
+
+        new Vault{value: VALID_FUND}(
+            CREATOR,
+            address(vaultFactory),
+            invalidAount,
+            VALID_DURATION,
+            beneficiaries
+        );
+    }
+
+    function test_Vault_ConstructorRevertsIfReleaseTimeIsInvalid() public {
+        uint256 inValidDeadline = 0;
+
+        vm.expectRevert(Vault.Vault__InvalidReleaseTime.selector);
+
+        new Vault{value: VALID_FUND}(
+            CREATOR,
+            address(vaultFactory),
+            VALID_FUND,
+            inValidDeadline,
+            beneficiaries
+        );
+    }
+
+    function test_Vault_ConstructorRevertIfNoBeneficiary() public {
+        address[] memory inValidBenefactors;
+
+        vm.expectRevert(Vault.Vault__NoBeneficiaryAdded.selector);
+
+        new Vault{value: VALID_FUND}(
+            CREATOR,
+            address(vaultFactory),
+            VALID_FUND,
+            VALID_DURATION,
+            inValidBenefactors
         );
     }
 
@@ -382,5 +445,25 @@ contract VaultTest is Test {
         uint256 newBalance = payment + currentBalance;
 
         assertEq(USER1.balance, newBalance);
+    }
+
+    function test_Withdraw_fails() public prepareVaultForWithdrawal {
+        vm.startPrank(USER4);
+
+        vm.expectRevert("Transfer Failed");
+
+        rejecter.rejectVaultWithdrawal(vault);
+        vm.stopPrank();
+    }
+
+    function test_Withdraw_ReentrancyAttack() public prepareVaultForWithdrawal {
+        uint256 pendingBefore = vault.getPendingWithdrawal(ATTACKER);
+        vm.startPrank(ATTACKER);
+
+        vm.expectRevert("Transfer Failed");
+        mockReentrancyAttacker.attack();
+
+        vm.stopPrank();
+        assertEq(vault.getPendingWithdrawal(ATTACKER), pendingBefore);
     }
 }

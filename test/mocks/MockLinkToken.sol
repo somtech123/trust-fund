@@ -41,7 +41,7 @@ contract MockLinkTokenReturnsFalse {
         return type(uint256).max; // always enough
     }
 
-    function approve(address, uint256) public returns (bool) {
+    function approve(address, uint256) public pure returns (bool) {
         return true;
     }
 
