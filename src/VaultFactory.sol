@@ -70,6 +70,7 @@ contract VaultFactory {
     error VaultFactory__InsufficientAllowance();
     error VaultFactory__LinkAmountLessThanMiniMumLink();
     error VaultFactory__LinkNoTDepositedYet();
+    error VaultFactory__InvalidAmountToCreateVault();
 
     /******************************************************************************
      *                                   Events                                   *
@@ -121,18 +122,24 @@ contract VaultFactory {
     ) external payable returns (address, uint256 upkeepID) {
         address sender = msg.sender;
         uint256 value = msg.value;
+        uint256 creationFee = value - amountInWei;
+
+        if (value < creationFee + amountInWei)
+            revert VaultFactory__InvalidAmountToCreateVault();
+
+        // uint256 balanceBefore = address(this).balance - msg.value;
 
         uint256 _releaseTime = releaseTime * 1 days;
 
         _createVaultAuthentication(
-            value,
+            value - amountInWei,
             amountInWei,
             linkAmountInWei,
             _releaseTime,
             beneficiaries
         );
 
-        Vault _vault = new Vault(
+        Vault _vault = new Vault{value: amountInWei}(
             sender,
             address(this),
             amountInWei,
@@ -161,8 +168,10 @@ contract VaultFactory {
 
         //refund any eth sent above sminimumEth
 
-        if (value > CREATION_FEE) {
-            uint256 refund = value - CREATION_FEE;
+        uint256 balanceAfter = address(this).balance;
+        uint256 refund = balanceAfter - CREATION_FEE;
+
+        if (refund > 0) {
             (bool sucess, ) = payable(sender).call{value: refund}("");
             require(sucess, "Refund failed");
         }

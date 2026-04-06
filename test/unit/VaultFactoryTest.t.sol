@@ -89,7 +89,7 @@ contract VaultFactoryTest is Test {
             VaultFactory.VaultFactory__InsuffcientCreationFee.selector
         );
 
-        vaultFactory.createVault{value: 0}(
+        vaultFactory.createVault{value: VALID_FUND + 0}(
             VALID_FUND,
             BASE_LINK_AMOUNT,
             VALID_DURATION,
@@ -109,7 +109,7 @@ contract VaultFactoryTest is Test {
     {
         vm.expectRevert(VaultFactory.VaultFactory__ZeroValueAmount.selector);
 
-        vaultFactory.createVault{value: CREATION_FEE}(
+        vaultFactory.createVault{value: CREATION_FEE + VALID_FUND}(
             0,
             BASE_LINK_AMOUNT,
             VALID_DURATION,
@@ -129,7 +129,7 @@ contract VaultFactoryTest is Test {
     {
         vm.expectRevert(VaultFactory.VaultFactory__LessThanMinimumEth.selector);
 
-        vaultFactory.createVault{value: CREATION_FEE}(
+        vaultFactory.createVault{value: CREATION_FEE + 0.001 ether}(
             0.001 ether,
             BASE_LINK_AMOUNT,
             VALID_DURATION,
@@ -152,7 +152,7 @@ contract VaultFactoryTest is Test {
             VaultFactory.VaultFactory__InvalidRealeaseTime.selector
         );
 
-        vaultFactory.createVault{value: CREATION_FEE}(
+        vaultFactory.createVault{value: CREATION_FEE + VALID_FUND}(
             VALID_FUND,
             BASE_LINK_AMOUNT,
             invalidReleaseTime,
@@ -175,7 +175,7 @@ contract VaultFactoryTest is Test {
             VaultFactory.VaultFactory__RealeaseTimeTooEarly.selector
         );
 
-        vaultFactory.createVault{value: CREATION_FEE}(
+        vaultFactory.createVault{value: CREATION_FEE + VALID_FUND}(
             VALID_FUND,
             BASE_LINK_AMOUNT,
             earlyReleaseTime,
@@ -196,7 +196,7 @@ contract VaultFactoryTest is Test {
 
         vm.expectRevert(VaultFactory.VaultFactory__NoBeneficiaryAdded.selector);
 
-        vaultFactory.createVault{value: CREATION_FEE}(
+        vaultFactory.createVault{value: CREATION_FEE + VALID_FUND}(
             VALID_FUND,
             BASE_LINK_AMOUNT,
             VALID_DURATION,
@@ -224,7 +224,7 @@ contract VaultFactoryTest is Test {
             VaultFactory.VaultFactory__BeneficiaryMaxAmountReached.selector
         );
 
-        vaultFactory.createVault{value: CREATION_FEE}(
+        vaultFactory.createVault{value: CREATION_FEE + VALID_FUND}(
             VALID_FUND,
             BASE_LINK_AMOUNT,
             VALID_DURATION,
@@ -253,7 +253,7 @@ contract VaultFactoryTest is Test {
             VaultFactory.VaultFactory__DuplicateBeneficiaryAdded.selector
         );
 
-        vaultFactory.createVault{value: CREATION_FEE}(
+        vaultFactory.createVault{value: CREATION_FEE + VALID_FUND}(
             VALID_FUND,
             BASE_LINK_AMOUNT,
             VALID_DURATION,
@@ -277,7 +277,7 @@ contract VaultFactoryTest is Test {
             VaultFactory.VaultFactory__ZeroAddressBeneficiary.selector
         );
 
-        vaultFactory.createVault{value: CREATION_FEE}(
+        vaultFactory.createVault{value: CREATION_FEE + VALID_FUND}(
             VALID_FUND,
             BASE_LINK_AMOUNT,
             VALID_DURATION,
@@ -297,7 +297,7 @@ contract VaultFactoryTest is Test {
     {
         beneficiarieslst.push(USER1);
 
-        vaultFactory.createVault{value: CREATION_FEE}(
+        vaultFactory.createVault{value: CREATION_FEE + VALID_FUND}(
             VALID_FUND,
             BASE_LINK_AMOUNT,
             VALID_DURATION,
@@ -320,7 +320,7 @@ contract VaultFactoryTest is Test {
     {
         beneficiarieslst.push(USER1);
 
-        vaultFactory.createVault{value: CREATION_FEE}(
+        vaultFactory.createVault{value: CREATION_FEE + VALID_FUND}(
             VALID_FUND,
             BASE_LINK_AMOUNT,
             VALID_DURATION,
@@ -346,7 +346,7 @@ contract VaultFactoryTest is Test {
         linkApprovedAndDeposited
         addBeneficiary
     {
-        vaultFactory.createVault{value: CREATION_FEE}(
+        vaultFactory.createVault{value: CREATION_FEE + VALID_FUND}(
             VALID_FUND,
             BASE_LINK_AMOUNT,
             VALID_DURATION,
@@ -375,7 +375,7 @@ contract VaultFactoryTest is Test {
 
         emit VaultFactory.CreatedVault(CREATOR, VALID_FUND, 1, 1);
 
-        vaultFactory.createVault{value: CREATION_FEE}(
+        vaultFactory.createVault{value: CREATION_FEE + VALID_FUND}(
             VALID_FUND,
             BASE_LINK_AMOUNT,
             VALID_DURATION,
@@ -393,7 +393,7 @@ contract VaultFactoryTest is Test {
         linkApprovedAndDeposited
         addBeneficiary
     {
-        vaultFactory.createVault{value: CREATION_FEE}(
+        vaultFactory.createVault{value: CREATION_FEE + VALID_FUND}(
             VALID_FUND,
             BASE_LINK_AMOUNT,
             VALID_DURATION,
@@ -420,6 +420,10 @@ contract VaultFactoryTest is Test {
         linkApprovedAndDeposited
     {
         uint256 vaultCount = 3;
+        vm.deal(
+            CREATOR,
+            VALID_FUND + CREATION_FEE * vaultCount + STARTING_BALANCE
+        );
 
         address[] memory _beneficiaries = new address[](1);
 
@@ -428,7 +432,7 @@ contract VaultFactoryTest is Test {
 
             _beneficiaries[0] = user;
 
-            vaultFactory.createVault{value: CREATION_FEE}(
+            vaultFactory.createVault{value: CREATION_FEE + VALID_FUND}(
                 VALID_FUND,
                 BASE_LINK_AMOUNT,
                 VALID_DURATION,
@@ -454,9 +458,9 @@ contract VaultFactoryTest is Test {
         addBeneficiary
     {
         uint256 excessFee = 1000000000000000;
-        uint256 initialBalance = CREATOR.balance;
+        uint256 initialBalance = CREATOR.balance - VALID_FUND;
 
-        vaultFactory.createVault{value: CREATION_FEE + excessFee}(
+        vaultFactory.createVault{value: VALID_FUND + CREATION_FEE + excessFee}(
             VALID_FUND,
             BASE_LINK_AMOUNT,
             VALID_DURATION,
@@ -505,7 +509,7 @@ contract VaultFactoryTest is Test {
             BASE_LINK_AMOUNT,
             VALID_DURATION,
             _beneficiaries,
-            CREATION_FEE + excessFee
+            CREATION_FEE + excessFee + VALID_FUND
         );
         vm.stopPrank();
     }
@@ -520,7 +524,7 @@ contract VaultFactoryTest is Test {
         linkApprovedAndDeposited
         addBeneficiary
     {
-        vaultFactory.createVault{value: CREATION_FEE}(
+        vaultFactory.createVault{value: CREATION_FEE + VALID_FUND}(
             VALID_FUND,
             BASE_LINK_AMOUNT,
             VALID_DURATION,
@@ -544,12 +548,13 @@ contract VaultFactoryTest is Test {
 
     /**@dev All inputs are valid; vault must be created successfully */
 
-    function testFuzz_CreateVault(
-        uint256 amountInWei,
+    function testFuzz_CreateVault_VaultCreatedSuccessfully(
+        uint256 _amountInWei,
         uint256 releaseTimeDays,
         uint256 numBeneficiaries
     ) public isCreator linkApprovedAndDeposited {
-        amountInWei = bound(amountInWei, MINIMUM_FEE, MAXIMUM_FEE);
+        _amountInWei = bound(_amountInWei, MINIMUM_FEE, MAXIMUM_FEE);
+        vm.deal(CREATOR, _amountInWei + STARTING_BALANCE);
 
         releaseTimeDays = bound(
             releaseTimeDays,
@@ -566,8 +571,8 @@ contract VaultFactoryTest is Test {
         address[] memory beneficiary = _createNthBeneficiary(numBeneficiaries);
 
         (address vaultAddress, ) = vaultFactory.createVault{
-            value: CREATION_FEE
-        }(amountInWei, BASE_LINK_AMOUNT, releaseTimeDays, beneficiary);
+            value: CREATION_FEE + _amountInWei
+        }(_amountInWei, BASE_LINK_AMOUNT, releaseTimeDays, beneficiary);
 
         assertTrue(vaultAddress != address(0));
         assertTrue(vaultFactory.isValidVault(vaultAddress));
@@ -587,9 +592,9 @@ contract VaultFactoryTest is Test {
         );
 
         address[] memory _beneficiary = _createNthBeneficiary(4);
-        uint256 balanceBefore = CREATOR.balance;
+        uint256 balanceBefore = CREATOR.balance - VALID_FUND;
 
-        vaultFactory.createVault{value: CREATION_FEE}(
+        vaultFactory.createVault{value: CREATION_FEE + VALID_FUND}(
             VALID_FUND,
             BASE_LINK_AMOUNT,
             releaseTimeDays,
@@ -609,6 +614,7 @@ contract VaultFactoryTest is Test {
         uint256 numBeneficiaries
     ) public isCreator linkApprovedAndDeposited {
         amountInWei = bound(amountInWei, MINIMUM_FEE, MAXIMUM_FEE);
+        vm.deal(CREATOR, amountInWei + STARTING_BALANCE);
 
         releaseTimeDays = bound(
             releaseTimeDays,
@@ -626,7 +632,7 @@ contract VaultFactoryTest is Test {
 
         uint256 counterBefore = vaultFactory.getVaultCount();
 
-        vaultFactory.createVault{value: CREATION_FEE}(
+        vaultFactory.createVault{value: CREATION_FEE + amountInWei}(
             amountInWei,
             BASE_LINK_AMOUNT,
             releaseTimeDays,
@@ -654,7 +660,7 @@ contract VaultFactoryTest is Test {
         vm.expectRevert(
             VaultFactory.VaultFactory__InsuffcientCreationFee.selector
         );
-        vaultFactory.createVault{value: creationFee}(
+        vaultFactory.createVault{value: creationFee + VALID_FUND}(
             VALID_FUND,
             BASE_LINK_AMOUNT,
             VALID_DURATION,
@@ -675,7 +681,7 @@ contract VaultFactoryTest is Test {
 
         vm.expectRevert(VaultFactory.VaultFactory__LessThanMinimumEth.selector);
 
-        vaultFactory.createVault{value: CREATION_FEE}(
+        vaultFactory.createVault{value: CREATION_FEE + amountInWei}(
             amountInWei,
             BASE_LINK_AMOUNT,
             VALID_DURATION,
@@ -698,7 +704,7 @@ contract VaultFactoryTest is Test {
             VaultFactory.VaultFactory__RealeaseTimeTooEarly.selector
         );
 
-        vaultFactory.createVault{value: CREATION_FEE}(
+        vaultFactory.createVault{value: CREATION_FEE + VALID_FUND}(
             VALID_FUND,
             BASE_LINK_AMOUNT,
             releaseTimeDays,
@@ -721,7 +727,7 @@ contract VaultFactoryTest is Test {
             VaultFactory.VaultFactory__BeneficiaryMaxAmountReached.selector
         );
 
-        vaultFactory.createVault{value: CREATION_FEE}(
+        vaultFactory.createVault{value: CREATION_FEE + VALID_FUND}(
             VALID_FUND,
             BASE_LINK_AMOUNT,
             VALID_DURATION,
@@ -745,7 +751,7 @@ contract VaultFactoryTest is Test {
             VaultFactory.VaultFactory__ZeroAddressBeneficiary.selector
         );
 
-        vaultFactory.createVault{value: CREATION_FEE}(
+        vaultFactory.createVault{value: CREATION_FEE + VALID_FUND}(
             VALID_FUND,
             BASE_LINK_AMOUNT,
             VALID_DURATION,
@@ -770,7 +776,7 @@ contract VaultFactoryTest is Test {
             VaultFactory.VaultFactory__DuplicateBeneficiaryAdded.selector
         );
 
-        vaultFactory.createVault{value: CREATION_FEE}(
+        vaultFactory.createVault{value: CREATION_FEE + VALID_FUND}(
             VALID_FUND,
             BASE_LINK_AMOUNT,
             VALID_DURATION,
@@ -797,12 +803,9 @@ contract VaultFactoryTest is Test {
         linkApprovedAndDeposited
     {
         address[] memory _beneficiary = _createNthBeneficiary(4);
-        (, uint256 upkeepID) = vaultFactory.createVault{value: CREATION_FEE}(
-            VALID_FUND,
-            BASE_LINK_AMOUNT,
-            VALID_DURATION,
-            _beneficiary
-        );
+        (, uint256 upkeepID) = vaultFactory.createVault{
+            value: CREATION_FEE + VALID_FUND
+        }(VALID_FUND, BASE_LINK_AMOUNT, VALID_DURATION, _beneficiary);
 
         assertGt(upkeepID, 0);
     }

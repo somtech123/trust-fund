@@ -37,6 +37,7 @@ contract Vault is Ownable, AutomationCompatibleInterface, ReentrancyGuard {
     error Vault__NoPendingWithdrawal();
     error Vault__NotBeneficiary();
     error Vault__InValidVault();
+    error Vault__InvalidAmount();
 
     event Vault__UpKeepPerform(uint256 amount, uint256 beneficiariesLength);
     event Vault__Withdrawn(address indexed sender, uint256 amount);
@@ -47,7 +48,8 @@ contract Vault is Ownable, AutomationCompatibleInterface, ReentrancyGuard {
         uint256 _amount,
         uint256 _releaseTime,
         address[] memory _beneficiaries
-    ) Ownable(_creator) {
+    ) payable Ownable(_creator) {
+        if (msg.value != _amount) revert Vault__InvalidAmount();
         if (_factory == address(0)) revert Vault__InvalidFactoryAddress();
         if (_releaseTime == 0) revert Vault__InvalidReleaseTime();
         if (_beneficiaries.length == 0) revert Vault__NoBeneficiaryAdded();
@@ -125,7 +127,7 @@ contract Vault is Ownable, AutomationCompatibleInterface, ReentrancyGuard {
         pendingWithdrawals[msg.sender] = 0;
         emit Vault__Withdrawn(msg.sender, payment);
 
-        (bool success, ) = msg.sender.call{value: payment}("");
+        (bool success, ) = payable(msg.sender).call{value: payment}("");
         require(success, "Transfer Failed");
     }
 

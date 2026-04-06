@@ -49,7 +49,7 @@ contract VaultTest is Test {
         beneficiaries.push(USER3);
 
         (address vaultAddress, ) = vaultFactory.createVault{
-            value: CREATION_FEE
+            value: CREATION_FEE + VALID_FUND
         }(VALID_FUND, BASE_LINK_AMOUNT, VALID_DURATION, beneficiaries);
 
         vm.stopPrank();
@@ -72,9 +72,26 @@ contract VaultTest is Test {
         vm.stopPrank();
     }
 
+    modifier isUser1() {
+        vm.startPrank(USER1);
+        _;
+        vm.stopPrank();
+    }
+
     modifier linkApprovedAndDeposited() {
         linkToken.approve(address(vaultFactory), BASE_LINK_AMOUNT);
         vaultFactory.depositLinkToken(BASE_LINK_AMOUNT);
+
+        _;
+    }
+
+    modifier prepareVaultForWithdrawal() {
+        uint256 releaseTime = vault.getReleaseTimeStamp();
+        vm.warp(block.timestamp + VALID_DURATION + releaseTime);
+
+        vm.roll(block.number + 1);
+
+        vault.performUpkeep("");
 
         _;
     }
@@ -113,7 +130,7 @@ contract VaultTest is Test {
 
         vm.expectRevert(Vault.Vault__InvalidFactoryAddress.selector);
 
-        new Vault(
+        new Vault{value: VALID_FUND}(
             CREATOR,
             fakeFactory,
             VALID_FUND,
@@ -143,7 +160,7 @@ contract VaultTest is Test {
     function test_CheckUpkeep_ReturnsFalse_WhenNotFromFactory() public {
         MockInvalidFactory rogueFactory = new MockInvalidFactory();
 
-        Vault rogueVault = new Vault(
+        Vault rogueVault = new Vault{value: VALID_FUND}(
             CREATOR,
             address(rogueFactory),
             VALID_FUND,
@@ -270,11 +287,13 @@ contract VaultTest is Test {
         uint256 fundAmount
     ) public isCreator linkApprovedAndDeposited {
         Vault _vault;
-        vm.assume(fundAmount > MINIMUM_FEE && fundAmount <= 100 ether);
+        vm.assume(fundAmount > MINIMUM_FEE && fundAmount <= 8 ether);
+        vm.deal(CREATOR, CREATION_FEE + fundAmount + 1 ether);
 
         address[] memory _benefactors = _createNthBeneficiary(7);
+
         (address vaultAddress, ) = vaultFactory.createVault{
-            value: CREATION_FEE
+            value: CREATION_FEE + fundAmount
         }(fundAmount, BASE_LINK_AMOUNT, VALID_DURATION, _benefactors);
 
         _vault = Vault(vaultAddress);
@@ -297,5 +316,71 @@ contract VaultTest is Test {
         }
 
         assertEq(fundAmount, totalPending);
+    }
+
+    function test_Withdraw_RevertsIfNotFromFactory() public isUser1 {
+        MockInvalidFactory rogueFactory = new MockInvalidFactory();
+        vm.deal(USER1, STARTING_BALANCE);
+
+        Vault rogueVault = new Vault{value: VALID_FUND}(
+            CREATOR,
+            address(rogueFactory),
+            VALID_FUND,
+            VALID_DURATION,
+            beneficiaries
+        );
+
+        vm.expectRevert(Vault.Vault__InValidVault.selector);
+
+        rogueVault.withdraw();
+    }
+
+    function test_Withdraw_RevertIfCallerNotBeneficiary() public {
+        address rogueUser = makeAddr("rogueUser");
+
+        vm.startPrank(rogueUser);
+        vm.expectRevert(Vault.Vault__NotBeneficiary.selector);
+        vault.withdraw();
+        vm.stopPrank();
+    }
+
+    function test_Withdraw_RevertsIfNoPendingWithdrawal() public isUser1 {
+        vm.expectRevert(Vault.Vault__NoPendingWithdrawal.selector);
+
+        vault.withdraw();
+    }
+
+    function test_Withdraw_WithdrawalIsSuccessfull()
+        public
+        isUser1
+        prepareVaultForWithdrawal
+    {
+        vault.withdraw();
+        assertEq(vault.getPendingWithdrawal(USER1), 0);
+    }
+
+    function test_Withdraw_EmitEvents()
+        public
+        isUser1
+        prepareVaultForWithdrawal
+    {
+        uint256 payment = vault.getPendingWithdrawal(USER1);
+        vm.expectEmit(true, false, false, true);
+        emit Vault.Vault__Withdrawn(USER1, payment);
+        vault.withdraw();
+    }
+
+    function test_Withdraw_FundsReceived()
+        public
+        isUser1
+        prepareVaultForWithdrawal
+    {
+        uint256 currentBalance = USER1.balance;
+        uint256 payment = vault.getPendingWithdrawal(USER1);
+
+        vault.withdraw();
+        uint256 newBalance = payment + currentBalance;
+
+        assertEq(USER1.balance, newBalance);
     }
 }
