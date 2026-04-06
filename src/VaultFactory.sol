@@ -46,6 +46,7 @@ contract VaultFactory {
     mapping(uint256 => VaultInfo) private sVaultInfo;
     mapping(address => bool) private sIsVault;
     mapping(address => address) private sIsFactory;
+    mapping(address => uint256) private sUserLinkBalance;
 
     LinkTokenInterface public immutable i_link;
     IKeeperRegistrar public immutable i_registrar;
@@ -70,7 +71,6 @@ contract VaultFactory {
     error VaultFactory__InsufficientAllowance();
     error VaultFactory__LinkAmountLessThanMiniMumLink();
     error VaultFactory__LinkNoTDepositedYet();
-    error VaultFactory__InvalidAmountToCreateVault();
 
     /******************************************************************************
      *                                   Events                                   *
@@ -99,6 +99,8 @@ contract VaultFactory {
         if (allowance < linkAmount)
             revert VaultFactory__InsufficientAllowance();
 
+        sUserLinkBalance[msg.sender] += linkAmount;
+
         bool success = i_link.transferFrom(
             msg.sender,
             address(this),
@@ -122,17 +124,10 @@ contract VaultFactory {
     ) external payable returns (address, uint256 upkeepID) {
         address sender = msg.sender;
         uint256 value = msg.value;
-        uint256 creationFee = value - amountInWei;
-
-        if (value < creationFee + amountInWei)
-            revert VaultFactory__InvalidAmountToCreateVault();
-
-        // uint256 balanceBefore = address(this).balance - msg.value;
-
         uint256 _releaseTime = releaseTime * 1 days;
 
         _createVaultAuthentication(
-            value - amountInWei,
+            value,
             amountInWei,
             linkAmountInWei,
             _releaseTime,
@@ -150,6 +145,7 @@ contract VaultFactory {
         address _vaultAddr = address(_vault);
 
         upkeepID = _registerAndPredictID(_vaultAddr);
+        sUserLinkBalance[msg.sender] -= linkAmountInWei;
 
         sVaultInfo[svaultCounter] = VaultInfo({
             vaultAddress: _vaultAddr,
@@ -163,6 +159,10 @@ contract VaultFactory {
         sIsFactory[_vaultAddr] = address(this);
 
         svaultCounter++;
+
+        if (sUserLinkBalance[msg.sender] == 0) {
+            linkApprovalState = LinkApprovalState.PENDING;
+        }
 
         emit CreatedVault(sender, amountInWei, svaultCounter, upkeepID);
 
@@ -190,11 +190,19 @@ contract VaultFactory {
         uint256 _releaseTime,
         address[] calldata beneficiaries
     ) internal {
-        if (value < CREATION_FEE) revert VaultFactory__InsuffcientCreationFee();
-        if (linkAmountInWei < s_minimumLink)
-            revert VaultFactory__LinkAmountLessThanMiniMumLink();
         if (linkApprovalState == LinkApprovalState.PENDING)
             revert VaultFactory__LinkNoTDepositedYet();
+
+        uint256 allowance = sUserLinkBalance[msg.sender];
+        if (allowance < linkAmountInWei)
+            revert VaultFactory__InsufficientAllowance();
+
+        if (value < CREATION_FEE + amountInWei)
+            revert VaultFactory__InsuffcientCreationFee();
+
+        if (linkAmountInWei < s_minimumLink)
+            revert VaultFactory__LinkAmountLessThanMiniMumLink();
+
         if (amountInWei == 0) revert VaultFactory__ZeroValueAmount();
         if (amountInWei < sminimumEth)
             revert VaultFactory__LessThanMinimumEth();

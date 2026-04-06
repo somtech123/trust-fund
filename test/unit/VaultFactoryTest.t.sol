@@ -50,10 +50,15 @@ contract VaultFactoryTest is Test {
         console.log("=============================", address(vaultFactory));
 
         vm.deal(CREATOR, STARTING_BALANCE);
+        // linkToken.mint(address(this), STARTING_BALANCE);
+
+        // linkToken.approve(address(vaultFactory), 2 ether);
+        // vaultFactory.depositLinkToken(2 ether);
     }
 
     modifier isCreator() {
         vm.startPrank(CREATOR);
+
         _;
         vm.stopPrank();
     }
@@ -66,8 +71,8 @@ contract VaultFactoryTest is Test {
     }
 
     modifier linkApprovedAndDeposited() {
-        linkToken.approve(address(vaultFactory), MINIMUM_LINK);
-        vaultFactory.depositLinkToken(MINIMUM_LINK);
+        linkToken.approve(address(vaultFactory), BASE_LINK_AMOUNT * 3);
+        vaultFactory.depositLinkToken(BASE_LINK_AMOUNT * 3);
 
         _;
     }
@@ -83,6 +88,7 @@ contract VaultFactoryTest is Test {
     function test_CreateVault_RevertsWithoutCreationFee()
         public
         isCreator
+        linkApprovedAndDeposited
         addBeneficiary
     {
         vm.expectRevert(
@@ -477,29 +483,17 @@ contract VaultFactoryTest is Test {
      ******************************************************************************/
     /**@dev refund fail when caller cannot receive the excess creation fee */
 
-    function test_CreateVault_RefundFailWhenCallerCannotReceiveEth()
-        public
-    // linkApprovedAndDeposited
-    {
+    function test_CreateVault_RefundFailWhenCallerCannotReceiveEth() public {
         uint256 excessFee = 10000000000000000;
 
         address[] memory _beneficiaries = new address[](1);
         address user = vm.addr(1);
         _beneficiaries[0] = user;
 
-        address _USER = makeAddr("USER1");
-
         MockRejecter rejecter = new MockRejecter(address(linkToken));
-        vm.startPrank(_USER);
 
-        vm.deal(_USER, STARTING_BALANCE);
         vm.deal(address(rejecter), STARTING_BALANCE);
-        linkToken.mint(_USER, STARTING_BALANCE);
-
-        console.log("++++++++++++++++++++++++", linkToken.balanceOf(_USER));
-
-        linkToken.approve(address(vaultFactory), MINIMUM_LINK);
-        vaultFactory.depositLinkToken(MINIMUM_LINK);
+        linkToken.mint(address(rejecter), STARTING_BALANCE);
 
         vm.expectRevert("Refund failed");
 
@@ -511,7 +505,6 @@ contract VaultFactoryTest is Test {
             _beneficiaries,
             CREATION_FEE + excessFee + VALID_FUND
         );
-        vm.stopPrank();
     }
 
     /******************************************************************************
@@ -846,7 +839,10 @@ contract VaultFactoryTest is Test {
     function test_DepositLink_Success() public isCreator {
         linkToken.approve(address(vaultFactory), MINIMUM_LINK);
 
-        console.log("******************", linkToken.balanceOf(CREATOR));
+        console.log(
+            "******************",
+            linkToken.balanceOf(address(vaultFactory))
+        );
 
         bool result = vaultFactory.depositLinkToken(MINIMUM_LINK);
 
@@ -855,6 +851,41 @@ contract VaultFactoryTest is Test {
         assert(
             vaultFactory.getLinkAprovalState() ==
                 VaultFactory.LinkApprovalState.APPROVED
+        );
+    }
+
+    function test_CreateVault_RevertIfZeroOrLowAllowance()
+        public
+        isCreator
+        linkApprovedAndDeposited
+        addBeneficiary
+    {
+        vm.expectRevert(
+            VaultFactory.VaultFactory__InsufficientAllowance.selector
+        );
+
+        vaultFactory.createVault{value: VALID_FUND + CREATION_FEE}(
+            VALID_FUND,
+            BASE_LINK_AMOUNT * 5,
+            VALID_DURATION,
+            beneficiaries
+        );
+    }
+
+    function test_CreateVault_RevertsIfLinkNotDeposited()
+        public
+        isCreator
+        addBeneficiary
+    {
+        vm.expectRevert(
+            VaultFactory.VaultFactory__LinkNoTDepositedYet.selector
+        );
+
+        vaultFactory.createVault{value: VALID_FUND + CREATION_FEE}(
+            VALID_FUND,
+            BASE_LINK_AMOUNT,
+            VALID_DURATION,
+            beneficiaries
         );
     }
 }

@@ -2,13 +2,14 @@
 pragma solidity ^0.8.24;
 import {VaultFactory} from "../../src/VaultFactory.sol";
 import {Vault} from "../../src/Vault.sol";
+import {MockLinkToken} from "./MockLinkToken.sol";
 
 contract MockRejecter {
     bool public rejectEth;
-    address linkAddress;
+    MockLinkToken linkToken;
 
     constructor(address _address) {
-        linkAddress = _address;
+        linkToken = MockLinkToken(_address);
     }
 
     receive() external payable {
@@ -23,7 +24,10 @@ contract MockRejecter {
         address[] calldata beneficiaries,
         uint256 fees
     ) external {
+        linkToken.approve(address(vaultFactory), linkAmount);
+        vaultFactory.depositLinkToken(linkAmount);
         rejectEth = true;
+
         vaultFactory.createVault{value: fees}(
             amountInWei,
             linkAmount,
