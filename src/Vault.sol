@@ -39,6 +39,10 @@ contract Vault is Ownable, AutomationCompatibleInterface, ReentrancyGuard {
     error Vault__InValidVault();
     error Vault__InvalidAmount();
 
+    /******************************************************************************
+     *                                   Events                                   *
+     ******************************************************************************/
+
     event Vault__UpKeepPerform(uint256 amount, uint256 beneficiariesLength);
     event Vault__Withdrawn(address indexed sender, uint256 amount);
 
@@ -70,6 +74,16 @@ contract Vault is Ownable, AutomationCompatibleInterface, ReentrancyGuard {
         _;
     }
 
+    /**
+     * @notice Checks whether the Chainlink Automation network should trigger `performUpkeep` for this vault.
+     * @dev Implements `AutomationCompatibleInterface.checkUpkeep`. Called off-chain
+           by Chainlink Automation nodes at regular intervals. No state is mutated.
+           Returns `true` only when ALL three conditions are satisfied:
+     
+     * @return upkeepNeeded True if all three conditions above are met, false otherwise.
+     * @return Empty `bytes` — no `performData` is passed to `performUpkeep
+     */
+
     function checkUpkeep(
         bytes memory /* checkData */
     )
@@ -89,6 +103,14 @@ contract Vault is Ownable, AutomationCompatibleInterface, ReentrancyGuard {
         upkeepNeeded = (timePassed && hasBalance && isOpen);
         return (upkeepNeeded, "");
     }
+
+    /**
+     * @notice Distributes vault funds equally among all beneficiaries when release
+               conditions are met, via the Chainlink Automation network.
+    *@dev      Implements `AutomationCompatibleInterface.performUpkeep`. Only callable
+               by the Chainlink Automation forwarder. Protected by `nonReentrant`.
+
+     */
 
     function performUpkeep(
         bytes calldata /* performData */
@@ -116,6 +138,11 @@ contract Vault is Ownable, AutomationCompatibleInterface, ReentrancyGuard {
         }
         emit Vault__UpKeepPerform(totalAmount, beneficiariesLength);
     }
+
+    /**
+     * @notice Allows a beneficiary to withdraw their allocated share of vault funds.
+     * @dev Implements the pull-payment pattern. ETH is never pushed automatically;
+     */
 
     function withdraw() public nonReentrant onlyValidVault {
         if (!VaultFactory(FACTORY_ADDRESS).isUserBeneficiary(msg.sender))
