@@ -5,18 +5,14 @@ import {Vault} from "./Vault.sol";
 import {IKeeperRegistrar} from "./interface/IKeeperRegistry.sol";
 
 /**
- * @title Trust Fund Vault Factory
+ * @title TrustVault Factory
  * @author Oscar Onyenacho
  * @notice A factory contract for managing and deploying Vault Contract.
- * @dev    Vault are deployed as individual `Vault` contracts, A creation fee is required
+ * @dev    Vault are deployed as individual `Vault` contracts, A creation fee in link to register chain-link
+ *         time-locked automation is required with a creation fee in eth for the protocol
  *         releaseTime are exressed in days
  */
 contract VaultFactory {
-    enum ApprovalState {
-        PENDING,
-        APPROVED
-    }
-
     enum LinkApprovalState {
         PENDING,
         APPROVED
@@ -40,7 +36,7 @@ contract VaultFactory {
     uint256 private constant CREATION_FEE = 1000000000000000; // 0.001 eth
     uint256 private svaultCounter;
     uint256 private sminimumEth = 10000000000000000; // 0.01 eth
-    uint256 private s_minimumLink = 2000000000000000000; //2 link
+    uint256 private s_minimumLink = 2000000000000000000; //2 link (chainlink minimum link to register up-keep)
 
     mapping(address => bool) private isBeneficiaries;
     mapping(uint256 => VaultInfo) private sVaultInfo;
@@ -48,9 +44,8 @@ contract VaultFactory {
     mapping(address => address) private sIsFactory;
     mapping(address => uint256) private sUserLinkBalance;
 
-    LinkTokenInterface public immutable i_link;
-    IKeeperRegistrar public immutable i_registrar;
-    ApprovalState private approvalState;
+    LinkTokenInterface private immutable i_link;
+    IKeeperRegistrar private immutable i_registrar;
     LinkApprovalState private linkApprovalState;
 
     /******************************************************************************
@@ -92,7 +87,16 @@ contract VaultFactory {
      *                             External Functions                             *
      ******************************************************************************/
 
-    function depositLinkToken(uint256 linkAmount) external returns (bool) {
+    /**
+     * @notice Deposits LINK tokens from the vault creator into the VaultFactory contract.
+     * @dev    Checks allowance before transfer link from vault creator to contract,
+     *         updates creator internal balance, and manages approval state transitions.
+     *         Reverts if allowance is insufficient or if the token transfer fails. Uses a two-phase `linkApprovalState` flag
+     *         (PENDING → APPROVED) to track transfer lifecycle.
+     * @param linkAmount The amount of LINK tokens (in wei) to deposit.
+     */
+
+    function depositLinkToken(uint96 linkAmount) external returns (bool) {
         linkApprovalState = LinkApprovalState.PENDING;
 
         uint256 allowance = i_link.allowance(msg.sender, address(this));
@@ -100,6 +104,8 @@ contract VaultFactory {
             revert VaultFactory__InsufficientAllowance();
 
         sUserLinkBalance[msg.sender] += linkAmount;
+
+        linkApprovalState = LinkApprovalState.APPROVED;
 
         bool success = i_link.transferFrom(
             msg.sender,
@@ -111,14 +117,35 @@ contract VaultFactory {
             revert VaultFactory__LinkApprovalDenied();
         }
 
-        linkApprovalState = LinkApprovalState.APPROVED;
-
         return success;
     }
 
+    /**
+     * @notice Creates a new time-locked Vault, registers it for Chainlink Automation,
+               and refunds any excess ETH to the caller
+    *  @dev     Workflow
+                1. Scales `releaseTime` from days to seconds.
+                2. Delegates all precondition checks to `_createVaultAuthentication`.
+                3. Deploys a new `Vault` contract, forwarding exactly `amountInWei` ETH.
+                4. Registers the vault with Chainlink Automation via `_registerAndPredictID`,
+                   debiting `linkAmountInWei` from the creator internal LINK balance.
+                5. Stores vault metadata in `sVaultInfo`, increments `svaultCounter`,
+                   and marks the address in `sIsVault` / `sIsFactory`.
+                6. Resets `linkApprovalState` to PENDING if the caller's LINK balance reaches zero after the deduction.
+                7. Refunds any ETH remaining above `CREATION_FEE` back to the caller.
+                   Emits {CreatedVault} before the refund transfer.
+     * @param amountInWei The amount of ETH (in wei) to lock inside the new vault.
+     * @param linkAmountInWei The amount of LINK (in wei) to fund the Chainlink The amount of LINK (in juels) to fund the Chainlink
+     * @param releaseTime  The lock duration in whole days. Internally converted to seconds
+     * @param beneficiaries  Ordered list of addresses permitted to claim vault funds after the release time. Must satisfy all constraints
+                              enforced by `_createVaultAuthentication`
+     * @return                The address of the newly deployed `Vault` contract.
+     * @return upkeepID  The Chainlink Automation upkeep ID assigned to the vault.
+     */
+
     function createVault(
         uint256 amountInWei,
-        uint256 linkAmountInWei,
+        uint96 linkAmountInWei,
         uint256 releaseTime,
         address[] calldata beneficiaries
     ) external payable returns (address, uint256 upkeepID) {
@@ -144,7 +171,7 @@ contract VaultFactory {
 
         address _vaultAddr = address(_vault);
 
-        upkeepID = _registerAndPredictID(_vaultAddr);
+        upkeepID = _registerAndPredictID(_vaultAddr, linkAmountInWei);
         sUserLinkBalance[msg.sender] -= linkAmountInWei;
 
         sVaultInfo[svaultCounter] = VaultInfo({
@@ -182,6 +209,30 @@ contract VaultFactory {
     /******************************************************************************
      *                             internal functions                             *
      ******************************************************************************/
+
+    /**
+     * @notice Validates all preconditions required before a new vault can be created.
+     * @dev    Internal guard function called prior to vault deployment. Performs the following checks in order:
+     *         1. LINK deposit state is not PENDING (i.e. LINK has been deposited).
+     *         2. vault creator internal LINK balance covers `linkAmountInWei`.
+     *         3. `msg.value` covers the flat `CREATION_FEE` plus the ETH amount to lock
+     *         4. `linkAmountInWei` meets the protocol minimum (`s_minimumLink`).
+               5. `amountInWei` is non-zero and meets the ETH floor (`sminimumEth`).
+               6. `_releaseTime` is non-zero and strictly greater than 10 days.
+               7. `beneficiaries` is non-empty and contains fewer than 10 addresses.
+               8. No beneficiary is not a zero address or a duplicate.
+               Marks each validated beneficiary in `isBeneficiaries` to prevent duplicates. 
+     * @param value The ETH value sent with the transaction (i.e. `msg.value`), used
+                    to verify the creation fee and vault funding are both covered.
+     * @param amountInWei The amount of ETH (in wei) to be locked inside the new vault.
+     * @param linkAmountInWei The amount of LINK (in wei) to be allocated to the
+                               vault for Chainlink automation funding.
+     * @param _releaseTime  The timestamp in days after which the vault funds become
+                            claimable by beneficiaries. Must exceed 10 days from now.
+     * @param beneficiaries An array of addresses authorised to claim from the vault.
+                            Must be non-empty and contain fewer than 10 entries,
+                            with no zero addresses or duplicates.
+     */
 
     function _createVaultAuthentication(
         uint256 value,
@@ -226,12 +277,21 @@ contract VaultFactory {
         }
     }
 
+    /**
+     * @notice Approves LINK and registers a newly deployed Vault with Chainlink
+               Automation, returning the assigned upkeep ID.
+     * @param _vault The address of the newly deployed `Vault` contract to automate.
+     * @param linkAmount The amount of LINK (in juels) to fund the upkeep with.
+                         Must have already been approved and held by this contract.
+     */
+
     function _registerAndPredictID(
-        address _vault
+        address _vault,
+        uint96 linkAmount
     ) internal returns (uint256 upKeedID) {
         // LINK must be approved for transfer (same comment as Chainlink example)
         // taking link from the contract address
-        uint96 linkAmount = 2000000000000000000;
+        // uint96 linkAmount = 2000000000000000000;
         i_link.approve(address(i_registrar), linkAmount);
 
         //register the upkeep
@@ -292,6 +352,15 @@ contract VaultFactory {
     /******************************************************************************
      *                                  Helpers                                   *
      ******************************************************************************/
+
+    /**
+      * @notice Converts the first 4 bytes of an address into a truncated hex string.
+      * @dev Does NOT encode the full 20-byte address. Only the leading 4 bytes are
+             processed, producing a 10-character string in the format `0xXXXXXXXX`.
+             Intended for display or labelling purposes (e.g. vault names / identifiers)
+             where a short human-readable address prefix is sufficient.
+      * @param addr  The full 20-byte address to partially encode.
+      */
 
     function _toHex(address addr) internal pure returns (string memory) {
         bytes memory hex_ = "0123456789abcdef";
