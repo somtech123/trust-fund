@@ -1,66 +1,25 @@
-## Foundry
+# TrustVault Protocol — Decentralized Trust Fund Protocol
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+A descentralized protocol for securely locking and distributing funds based on a predefined condition
+---
 
-Foundry consists of:
+## 📋 Table of Contents
 
-- **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
-- **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
-- **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
-- **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+- [Overview](#overview)
 
-## Documentation
+---
 
-https://book.getfoundry.sh/
+## Overview
 
-## Usage
+**TrustVault** is a smart contract protocol for creating secure on-chain trust funds where users can deposit assets, assign beneficiaries, and define conditions for withdrawals. each funds is deployed via a factory, ensuring scalability, isolation and temper-proof fund distribution with built in security features
 
-### Build
+### Why TrustVault?
 
-```shell
-$ forge build
-```
-
-### Test
-
-```shell
-$ forge test
-```
-
-### Format
-
-```shell
-$ forge fmt
-```
-
-### Gas Snapshots
-
-```shell
-$ forge snapshot
-```
-
-### Anvil
-
-```shell
-$ anvil
-```
-
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
+| Features | Traditional Platforms | TrustVault |
+|---|---|---|
+| Control of funds | Managed by banks or intermediaries | Controlled by smart contracts
+| Transparency | Limited, Opaque processes | Fully Transparent and on-chain
+| Access | Requires approvals and paperwork | Permissionless and global access
+| Execution of rules | Manually enforced | Automatically enforced by contract
+| Speed | Slow(Manual processing) | Fast (automated execution)
+| Custom conditions | Limited Flexibility | Fully customizable(time lock triger)
